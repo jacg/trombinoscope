@@ -52,6 +52,7 @@
                 pkgs.openssl
                 pkgs.pkg-config
                 pkgs.dioxus-cli
+                pkgs.trunk
               ];
               packages = [
                 pkgs.lolcat
