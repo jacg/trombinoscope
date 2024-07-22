@@ -1,59 +1,50 @@
 use std::fs;
+use std::io::Write;
 
 use typst::foundations::Smart;
 use typst::eval::Tracer;
 use classlist::TypstWrapperWorld;
 
-fn main() {
-    let content = r#"
-#import "@preview/tablex:0.0.8": tablex, rowspanx, colspanx
+#[derive(Debug, Clone)]
+struct Item {
+    filename: String,
+    name: String,
+    surname: String,
+}
 
-#tablex(
-  columns: 4,
-  align: center + horizon,
-  auto-vlines: false,
-
-  // indicate the first two rows are the header
-  // (in case we need to eventually
-  // enable repeating the header across pages)
-  header-rows: 2,
-
-  // color the last column's cells
-  // based on the written number
-  map-cells: cell => {
-    if cell.x == 3 and cell.y > 1 {
-      cell.content = {
-        let value = int(cell.content.text)
-        let text-color = if value < 10 {
-          red.lighten(30%)
-        } else if value < 15 {
-          yellow.darken(13%)
-        } else {
-          green
-        }
-        set text(text-color)
-        strong(cell.content)
-      }
+impl Item {
+    fn new(filename: &str, name: &str, surname: &str) -> Self {
+        Item { filename: filename.into(), name: name.into(), surname: surname.to_uppercase() }
     }
-    cell
-  },
+}
 
-  /* --- header --- */
-  rowspanx(2)[*Username*], colspanx(2)[*Data*], (), rowspanx(2)[*Score*],
-  (),                 [*Location*], [*Height*], (),
-  /* -------------- */
+fn render_items(items: &[Option<Item>], dir: &str, classe: &str) {
 
-  [John], [Second St.], [180 cm], [5],
-  [Wally], [Third Av.], [160 cm], [10],
-  [Jason], [Some St.], [150 cm], [15],
-  [Robert], [123 Av.], [190 cm], [20],
-  [Other], [Unknown St.], [170 cm], [25],
-)
-"#
-    .to_owned();
+    let pic  = |i: &Option<Item>| if let Some(j) = i { format!(r#"image("{dir}/{n}.jpg", width: 100%), "#, n=j.filename) }                                                                            else { "[],".into() };
+    let name = |i: &Option<Item>| if let Some(i) = i { format!("[#text([{name}], stroke: none, fill: colA) #h(1mm) #text([{surname}], stroke: none, fill: colB)],", name=i.name, surname=i.surname) } else { "[],".into() };
+
+    macro_rules! make_row {
+        ($bounds:expr) => {(
+            items[$bounds].iter().map(pic ).collect::<Vec<_>>().join(""),
+            items[$bounds].iter().map(name).collect::<Vec<_>>().join("")
+        )};
+    }
+    let (row_1_pics, row_1_names)  = make_row![  .. 6];
+    let (row_2_pics, row_2_names)  = make_row![ 6..12];
+    let (row_3_pics, row_3_names)  = make_row![12..18];
+    let (row_4_pics, row_4_names)  = make_row![18..24];
+
+    let table = format!(r#"
+  {row_1_pics} {row_1_names} table.hline(),
+  {row_2_pics} {row_2_names} table.hline(),
+  {row_3_pics} {row_3_names} table.hline(),
+  {row_4_pics} {row_4_names}
+"#);
+
+    let content = format!("{header}{table})", header = header(classe));
 
     // Create world with content.
-    let world = TypstWrapperWorld::new("./".to_owned(), content);
+    let world = TypstWrapperWorld::new("./".to_owned(), content.clone());
 
     // Render document
     let mut tracer = Tracer::default();
@@ -64,4 +55,56 @@ fn main() {
     fs::write("./output.pdf", pdf).expect("Error writing PDF.");
     println!("Created pdf: `./output.pdf`");
 
+    let mut out = fs::File::create("hmm.typ").unwrap();
+    out.write_all(content.as_bytes()).unwrap();
+
+}
+
+fn main() {
+    doit("data", "666");
+}
+
+fn doit(top_data_dir: &str, classe: &str) {
+
+    let dir = format!("{top_data_dir}/{classe}");
+    let cache_file = format!("{dir}/.cache");
+
+    let cache_contents = std::fs::read_to_string(cache_file)
+        .unwrap();
+
+    let lines = cache_contents.lines();
+    let items: Vec<Option<Item>> = lines
+        .enumerate()
+        .map(|(n, line)| (n, line, line.split(',').map(str::trim)) )
+        .map(|(n, line, line_components)| {
+            let [filename, name, surname] = line_components.collect::<Vec<_>>()[..] else {
+                panic!("Wrong number of commas on line {n} of cache file: '{line}'", n=n+1)
+            };
+            Some(Item::new(filename, name, surname))
+        })
+        .chain(vec![None; 24])
+        .collect();
+
+    render_items(&items, &dir, classe);
+}
+
+fn header(classe: &str) -> String {
+    format!(r#"
+#set page(
+  paper: "a4",
+  margin: (top: 10mm, bottom: 4mm, left: 5mm, right: 5mm),
+)
+
+#let colA = rgb(150,0,0)
+#let colB = rgb(0,0,150)
+
+#align(center, text([CLASSE {classe}], size: 50pt))
+
+#v(-8mm) // TODO find sensible way of reducing space before table
+
+#table(
+  columns: 6,
+  align: center + horizon,
+  //stroke: none,
+"#)
 }
