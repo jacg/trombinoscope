@@ -5,3 +5,4 @@ tmp/
 .direnv
 /target/
 /dist/
+/output.pdf

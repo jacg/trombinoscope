@@ -6,4 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { version = "0.5.1", features = ["web"] }
+comemo = "0.4.0"
+tar = "0.4.41"
+time = "0.3.36"
+ttf-parser = "0.24.0"
+typst = "0.11.1"
+typst-pdf = "0.11.1"
+ureq = "2.10.0"
+zune-inflate = "0.2.54"
