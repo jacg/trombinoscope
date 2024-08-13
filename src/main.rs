@@ -20,7 +20,7 @@ impl Item {
 
 fn render_items(items: &[Option<Item>], dir: &str, classe: &str) {
 
-    let pic  = |i: &Option<Item>| if let Some(j) = i { format!(r#"image("{dir}/{n}.jpg", width: 100%), "#, n=j.filename) }                                                                            else { "[],".into() };
+    let pic  = |i: &Option<Item>| if let Some(j) = i { format!(r#"image("{n}.jpg", width: 100%), "#, n=j.filename) }                                                                                  else { "[],".into() };
     let name = |i: &Option<Item>| if let Some(i) = i { format!("[#text([{name}], stroke: none, fill: colA) #h(1mm) #text([{surname}], stroke: none, fill: colB)],", name=i.name, surname=i.surname) } else { "[],".into() };
 
     macro_rules! make_row {
@@ -44,11 +44,11 @@ fn render_items(items: &[Option<Item>], dir: &str, classe: &str) {
     let content = format!("{header}{table})", header = header(classe));
 
     // Create world with content.
-    let world = TypstWrapperWorld::new("./".to_owned(), content.clone());
+    let world = TypstWrapperWorld::new(dir.to_owned(), content.clone());
 
     // Render document
     let mut tracer = Tracer::default();
-    let document = typst::compile(&world, &mut tracer).expect("Error compiling typst.");
+    let document = typst::compile(&world, &mut tracer).expect("Trombinoscope Error compiling typst.");
 
     // Output to pdf and svg
     let pdf = typst_pdf::pdf(&document, Smart::Auto, None);
