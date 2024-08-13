@@ -6,23 +6,28 @@ use typst::foundations::Smart;
 use typst::eval::Tracer;
 use trombinoscope::TypstWrapperWorld;
 
-#[derive(Debug, Clone)]
-struct Item {
-    filename: String,
-    name: String,
-    surname: String,
-}
+#[derive(Debug, Clone)] struct Name { given   : String, family: String }
+#[derive(Debug, Clone)] struct Item { filename: String, name: Option<Name> }
+#[derive(Debug       )] struct Cache(Vec<Item>);
 
 impl Item {
     fn new(filename: &str, name: &str, surname: &str) -> Self {
-        Item { filename: filename.into(), name: name.into(), surname: surname.to_uppercase() }
+        Item { filename: filename.into(), name:
+               Some(Name { given: name.into(), family: surname.to_uppercase()}) }
     }
 }
 
 fn render_items(items: &[Option<Item>], class_data_dir: impl AsRef<Path>) {
 
-    let pic  = |i: &Option<Item>| if let Some(j) = i { format!(r#"image("{n}.jpg", width: 100%), "#, n=j.filename) }                                                                                  else { "[],".into() };
-    let name = |i: &Option<Item>| if let Some(i) = i { format!("[#text([{name}], stroke: none, fill: colA) #h(1mm) #text([{surname}], stroke: none, fill: colB)],", name=i.name, surname=i.surname) } else { "[],".into() };
+    let pic  = |i: &Option<Item>| if let Some(j) = i { format!(r#"image("{n}.jpg", width: 100%), "#, n=j.filename) } else { "[],".into() };
+    let name = |i: &Option<Item>| if let Some(i) = i {
+        let (name, surname) = if let Some(name) = &i.name {
+            (name.given.clone(), name.family.clone())
+        } else {
+            ("Prénom"   .into(), "Nom"       .into())
+        };
+        format!("[#text([{name}], stroke: none, fill: colA) #h(1mm) #text([{surname}], stroke: none, fill: colB)],") }
+    else { "[],".into() };
 
     macro_rules! make_row {
         ($bounds:expr) => {(
