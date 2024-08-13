@@ -61,7 +61,17 @@ fn render_items(items: &[Option<Item>], dir: &str, classe: &str) {
 }
 
 fn main() {
-    doit("data", "666");
+    let mut args = std::env::args();
+
+    let _executable = args.next();
+
+    let top_data_dir = if let Some(dir) = args.next() { dir }
+    else { panic!("Pass the directory containing the class directories as first argument"); };
+
+    if let Some(class) = args.next() { doit(&top_data_dir, &class) }
+    else { panic!("Pass the class name as second argument"); };
+
+
 }
 
 fn doit(top_data_dir: &str, classe: &str) {
