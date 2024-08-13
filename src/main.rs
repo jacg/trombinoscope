@@ -1,5 +1,6 @@
 use std::fs;
 use std::io::Write;
+use std::path::{Path, PathBuf};
 
 use typst::foundations::Smart;
 use typst::eval::Tracer;
@@ -18,7 +19,7 @@ impl Item {
     }
 }
 
-fn render_items(items: &[Option<Item>], dir: &str, classe: &str) {
+fn render_items(items: &[Option<Item>], class_data_dir: impl AsRef<Path>) {
 
     let pic  = |i: &Option<Item>| if let Some(j) = i { format!(r#"image("{n}.jpg", width: 100%), "#, n=j.filename) }                                                                                  else { "[],".into() };
     let name = |i: &Option<Item>| if let Some(i) = i { format!("[#text([{name}], stroke: none, fill: colA) #h(1mm) #text([{surname}], stroke: none, fill: colB)],", name=i.name, surname=i.surname) } else { "[],".into() };
@@ -41,10 +42,15 @@ fn render_items(items: &[Option<Item>], dir: &str, classe: &str) {
   {row_4_pics} {row_4_names}
 "#);
 
-    let content = format!("{header}{table})", header = header(classe));
+    let std::path::Component::Normal(class) = class_data_dir.as_ref().components().last().unwrap()
+        else { panic!("Last component of `{dir}` cannot be interpreted as a class name", dir = class_data_dir.as_ref().display()) };
+
+    let class = class.to_str().unwrap();
+
+    let content = format!("{header}{table})", header = header(&class));
 
     // Create world with content.
-    let world = TypstWrapperWorld::new(dir.to_owned(), content.clone());
+    let world = TypstWrapperWorld::new(class_data_dir.as_ref().display().to_string(), content.clone());
 
     // Render document
     let mut tracer = Tracer::default();
@@ -65,19 +71,19 @@ fn main() {
 
     let _executable = args.next();
 
-    let top_data_dir = if let Some(dir) = args.next() { dir }
-    else { panic!("Pass the directory containing the class directories as first argument"); };
+    let class_data_dir = if let Some(dir) = args.next() { dir }
+    else { panic!("Pass the directory containing the class photographs as first CLI argument"); };
 
-    if let Some(class) = args.next() { doit(&top_data_dir, &class) }
-    else { panic!("Pass the class name as second argument"); };
+    let class_data_dir: PathBuf = class_data_dir.into();
 
+    ensure_cache_file(&class_data_dir);
+    render_from_cache_file(&class_data_dir)
 
 }
 
-fn doit(top_data_dir: &str, classe: &str) {
+fn render_from_cache_file(class_data_dir: impl AsRef<Path>) {
 
-    let dir = format!("{top_data_dir}/{classe}");
-    let cache_file = format!("{dir}/.cache");
+    let cache_file = class_data_dir.as_ref().join(".cache");
 
     let cache_contents = std::fs::read_to_string(cache_file)
         .unwrap();
@@ -95,7 +101,7 @@ fn doit(top_data_dir: &str, classe: &str) {
         .chain(vec![None; 24])
         .collect();
 
-    render_items(&items, &dir, classe);
+    render_items(&items, &class_data_dir);
 }
 
 fn header(classe: &str) -> String {
@@ -117,4 +123,8 @@ fn header(classe: &str) -> String {
   align: center + horizon,
   //stroke: none,
 "#)
+}
+
+fn ensure_cache_file(_directory: impl AsRef<Path>) {
+
 }
