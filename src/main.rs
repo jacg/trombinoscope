@@ -3,7 +3,7 @@ use std::io::Write;
 
 use typst::foundations::Smart;
 use typst::eval::Tracer;
-use classlist::TypstWrapperWorld;
+use trombinoscope::TypstWrapperWorld;
 
 #[derive(Debug, Clone)]
 struct Item {

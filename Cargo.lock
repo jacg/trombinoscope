@@ -200,20 +200,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "classlist"
-version = "0.1.0"
-dependencies = [
- "comemo",
- "tar",
- "time",
- "ttf-parser 0.24.0",
- "typst",
- "typst-pdf",
- "ureq",
- "zune-inflate",
-]
-
-[[package]]
 name = "cobs"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1783,6 +1769,20 @@ dependencies = [
  "serde_spanned",
  "toml_datetime",
  "winnow",
+]
+
+[[package]]
+name = "trombinoscope"
+version = "0.1.0"
+dependencies = [
+ "comemo",
+ "tar",
+ "time",
+ "ttf-parser 0.24.0",
+ "typst",
+ "typst-pdf",
+ "ureq",
+ "zune-inflate",
 ]
 
 [[package]]
