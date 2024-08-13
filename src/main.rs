@@ -1,5 +1,5 @@
+use std::ffi::OsStr;
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use typst::foundations::Smart;
@@ -47,7 +47,7 @@ fn render_items(items: &[Option<Item>], class_data_dir: impl AsRef<Path>) {
 
     let class = class.to_str().unwrap();
 
-    let content = format!("{header}{table})", header = header(&class));
+    let content = format!("{header}{table})", header = header(class));
 
     // Create world with content.
     let world = TypstWrapperWorld::new(class_data_dir.as_ref().display().to_string(), content.clone());
@@ -61,8 +61,8 @@ fn render_items(items: &[Option<Item>], class_data_dir: impl AsRef<Path>) {
     fs::write("./output.pdf", pdf).expect("Error writing PDF.");
     println!("Created pdf: `./output.pdf`");
 
-    let mut out = fs::File::create("hmm.typ").unwrap();
-    out.write_all(content.as_bytes()).unwrap();
+    // let mut out = fs::File::create("generated.typ").unwrap();
+    // out.write_all(content.as_bytes()).unwrap();
 
 }
 
@@ -76,16 +76,18 @@ fn main() {
 
     let class_data_dir: PathBuf = class_data_dir.into();
 
-    ensure_cache_file(&class_data_dir);
-    render_from_cache_file(&class_data_dir)
+    ensure_cache_file     (&class_data_dir);
+    render_from_cache_file(&class_data_dir);
 
+}
+
+fn cache_file_for_dir(dir: impl AsRef<Path>) -> PathBuf {
+    dir.as_ref().join(".cache")
 }
 
 fn render_from_cache_file(class_data_dir: impl AsRef<Path>) {
 
-    let cache_file = class_data_dir.as_ref().join(".cache");
-
-    let cache_contents = std::fs::read_to_string(cache_file)
+    let cache_contents = std::fs::read_to_string(cache_file_for_dir(&class_data_dir))
         .unwrap();
 
     let lines = cache_contents.lines();
@@ -125,6 +127,20 @@ fn header(classe: &str) -> String {
 "#)
 }
 
-fn ensure_cache_file(_directory: impl AsRef<Path>) {
+fn ensure_cache_file(directory: impl AsRef<Path>) {
+    let cache_file = cache_file_for_dir(&directory);
+    if ! cache_file.exists() {
+        let images = find_images_in_dir(directory);
+        for y in &images { println!("{y:?}")}
+    }
+}
 
+fn find_images_in_dir(dir: impl AsRef<Path>) -> Vec<String> {
+    std::fs::read_dir(dir)
+        .unwrap()
+        .map(|res| res.map(|e| e.path()).unwrap())
+        .filter(|path| path.extension() == Some(OsStr::new("jpg")))
+        .map(|path| path.file_name().unwrap().to_owned())
+        .map(|file| file.to_str().unwrap().to_owned())
+        .collect()
 }
