@@ -92,21 +92,11 @@ fn cache_file_for_dir(dir: impl AsRef<Path>) -> PathBuf {
 
 fn render_from_cache_file(class_data_dir: impl AsRef<Path>) {
 
-    let cache_contents = std::fs::read_to_string(cache_file_for_dir(&class_data_dir))
-        .unwrap();
-
-    let lines = cache_contents.lines();
-    let items: Vec<Option<Item>> = lines
-        .enumerate()
-        .map(|(n, line)| (n, line, line.split(',').map(str::trim)) )
-        .map(|(n, line, line_components)| {
-            let [filename, name, surname] = line_components.collect::<Vec<_>>()[..] else {
-                panic!("Wrong number of commas on line {n} of cache file: '{line}'", n=n+1)
-            };
-            Some(Item::new(filename, name, surname))
-        })
-        .chain(vec![None; 24])
-        .collect();
+    let items = read_cache_file(&class_data_dir)
+        .0
+        .into_iter()
+        .map(Some)
+        .collect::<Vec<_>>();
 
     render_items(&items, &class_data_dir);
 }
@@ -138,6 +128,24 @@ fn ensure_cache_file(directory: impl AsRef<Path>) {
         let images = find_images_in_dir(directory);
         for y in &images { println!("{y:?}")}
     }
+}
+
+fn read_cache_file(dir: impl AsRef<Path>) -> Cache {
+    let cache_contents = std::fs::read_to_string(cache_file_for_dir(&dir))
+        .unwrap();
+
+    let lines = cache_contents.lines();
+    let items: Vec<Item> = lines
+        .enumerate()
+        .map(|(n, line)| (n, line, line.split(',').map(str::trim)) )
+        .map(|(n, line, line_components)| {
+            let [filename, name, surname] = line_components.collect::<Vec<_>>()[..] else {
+                panic!("Wrong number of commas on line {n} of cache file: '{line}'", n=n+1)
+            };
+            Item::new(filename, name, surname)
+        })
+        .collect();
+    Cache(items)
 }
 
 fn find_images_in_dir(dir: impl AsRef<Path>) -> Vec<String> {
