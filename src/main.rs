@@ -8,7 +8,7 @@ use trombinoscope::TypstWrapperWorld;
 
 #[derive(Debug, Clone)] struct Name { given: String, family: String }
 #[derive(Debug, Clone)] struct Item { image: String, name: Name }
-#[derive(Debug       )] struct Cache(Vec<Item>);
+#[derive(Debug       )] struct State(Vec<Item>);
 
 impl Item {
     fn new(filename: &str, name: &str, surname: &str) -> Self {
@@ -88,7 +88,7 @@ fn cache_file_for_dir(dir: impl AsRef<Path>) -> PathBuf {
     dir.as_ref().join(".cache")
 }
 
-fn render_state(state: &Cache, dir: impl AsRef<Path>) {
+fn render_state(state: &State, dir: impl AsRef<Path>) {
     let items = state
         .0
         .iter()
@@ -127,12 +127,12 @@ fn ensure_cache_file(dir: impl AsRef<Path>) {
             .iter()
             .map(|image| Item { image: image.into(), name: Name { given: "Prénom".into(), family: "Nom".into() }})
             .collect::<Vec<_>>();
-        let new_cache_file_state = Cache(new_cache_file_state);
+        let new_cache_file_state = State(new_cache_file_state);
         write_cache_file(&new_cache_file_state, &dir);
     }
 }
 
-fn read_cache_file(dir: impl AsRef<Path>) -> Cache {
+fn read_cache_file(dir: impl AsRef<Path>) -> State {
     let cache_contents = std::fs::read_to_string(cache_file_for_dir(&dir))
         .unwrap();
 
@@ -147,10 +147,10 @@ fn read_cache_file(dir: impl AsRef<Path>) -> Cache {
             Item::new(filename, name, surname)
         })
         .collect();
-    Cache(items)
+    State(items)
 }
 
-fn write_cache_file(state: &Cache, dir: impl AsRef<Path>) {
+fn write_cache_file(state: &State, dir: impl AsRef<Path>) {
     let contents = state.0
         .iter()
         .map(|Item { image, name }| format!("{image}, {}, {}", name.given, name.family))
