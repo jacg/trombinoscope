@@ -7,13 +7,13 @@ use typst::eval::Tracer;
 use trombinoscope::TypstWrapperWorld;
 
 #[derive(Debug, Clone)] struct Name { given   : String, family: String }
-#[derive(Debug, Clone)] struct Item { filename: String, name: Option<Name> }
+#[derive(Debug, Clone)] struct Item { filename: String, name: Name }
 #[derive(Debug       )] struct Cache(Vec<Item>);
 
 impl Item {
     fn new(filename: &str, name: &str, surname: &str) -> Self {
         Item { filename: filename.into(), name:
-               Some(Name { given: name.into(), family: surname.to_uppercase()}) }
+               Name { given: name.into(), family: surname.into()} }
     }
 }
 
@@ -21,12 +21,9 @@ fn render_items(items: &[Option<Item>], class_data_dir: impl AsRef<Path>) {
 
     let pic  = |i: &Option<Item>| if let Some(j) = i { format!(r#"image("{n}.jpg", width: 100%), "#, n=j.filename) } else { "[],".into() };
     let name = |i: &Option<Item>| if let Some(i) = i {
-        let (name, surname) = if let Some(name) = &i.name {
-            (name.given.clone(), name.family.clone())
-        } else {
-            ("Prénom"   .into(), "Nom"       .into())
-        };
-        format!("[#text([{name}], stroke: none, fill: colA) #h(1mm) #text([{surname}], stroke: none, fill: colB)],") }
+        let Name { given, family } = &i.name;
+        let family = family.to_uppercase();
+        format!("[#text([{given}], stroke: none, fill: colA) #h(1mm) #text([{family}], stroke: none, fill: colB)],") }
     else { "[],".into() };
 
     macro_rules! make_row {
@@ -81,24 +78,24 @@ fn main() {
 
     let class_data_dir: PathBuf = class_data_dir.into();
 
-    ensure_cache_file     (&class_data_dir);
-    render_from_cache_file(&class_data_dir);
-
+    ensure_cache_file      (&class_data_dir);
+    let state = read_cache_file(&class_data_dir);
+    render_state(&state, &class_data_dir);
+    write_cache_file(&state, &class_data_dir);
 }
 
 fn cache_file_for_dir(dir: impl AsRef<Path>) -> PathBuf {
     dir.as_ref().join(".cache")
 }
 
-fn render_from_cache_file(class_data_dir: impl AsRef<Path>) {
-
-    let items = read_cache_file(&class_data_dir)
+fn render_state(state: &Cache, dir: impl AsRef<Path>) {
+    let items = state
         .0
-        .into_iter()
+        .iter()
+        .cloned()
         .map(Some)
         .collect::<Vec<_>>();
-
-    render_items(&items, &class_data_dir);
+    render_items(&items, &dir);
 }
 
 fn header(classe: &str) -> String {
@@ -146,6 +143,15 @@ fn read_cache_file(dir: impl AsRef<Path>) -> Cache {
         })
         .collect();
     Cache(items)
+}
+
+fn write_cache_file(state: &Cache, dir: impl AsRef<Path>) {
+    let contents = state.0
+        .iter()
+        .map(|Item { filename, name }| format!("{filename}, {}, {}", name.given, name.family))
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(cache_file_for_dir(dir), contents + "\n").unwrap();
 }
 
 fn find_images_in_dir(dir: impl AsRef<Path>) -> Vec<String> {
