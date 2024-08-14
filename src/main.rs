@@ -93,11 +93,26 @@ fn cache_file_for_dir(dir: impl AsRef<Path>) -> PathBuf {
 }
 
 fn render_state(state: &State, dir: impl AsRef<Path>) {
-    let items = state
+    let mut items = state
         .iter_items()
         .map(Some)
         .chain(vec![None; 24])
     .collect::<Vec<_>>();
+
+    items.sort_by(|l,r| {
+        use std::cmp::Ordering::*;
+        match (l,r) {
+            (None, None) => Equal,
+            (None, Some(_)) => Greater,
+            (Some(_), None) => Less,
+            (Some(Item { name: l, .. }), Some(Item { name: r, .. })) => {
+                match l.family.cmp(&r.family) {
+                    Equal => l.given.cmp(&r.given),
+                    different => different,
+                }
+            }
+        }});
+
     render_items(&items, &dir);
 }
 
