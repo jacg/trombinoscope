@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -8,12 +9,15 @@ use trombinoscope::TypstWrapperWorld;
 
 #[derive(Debug, Clone)] struct Name { given: String, family: String }
 #[derive(Debug, Clone)] struct Item { image: String, name: Name }
-#[derive(Debug       )] struct State(Vec<Item>);
+#[derive(Debug       )] struct State(HashMap<String, Name>);
 
-impl Item {
-    fn new(filename: &str, name: &str, surname: &str) -> Self {
-        Item { image: filename.into(), name:
-               Name { given: name.into(), family: surname.into()} }
+impl State {
+    fn iter_items(&self) -> impl Iterator<Item = Item> + '_ {
+        self
+            .0
+            .iter()
+            .map(|(image, name)| Item { image: image.clone(), name: name.clone() } )
+
     }
 }
 
@@ -90,9 +94,7 @@ fn cache_file_for_dir(dir: impl AsRef<Path>) -> PathBuf {
 
 fn render_state(state: &State, dir: impl AsRef<Path>) {
     let items = state
-        .0
-        .iter()
-        .cloned()
+        .iter_items()
         .map(Some)
         .chain(vec![None; 24])
     .collect::<Vec<_>>();
@@ -125,8 +127,8 @@ fn ensure_cache_file(dir: impl AsRef<Path>) {
     if ! cache_file.exists() {
         let new_cache_file_state = find_image_prefixes_in_dir(&dir)
             .iter()
-            .map(|image| Item { image: image.into(), name: Name { given: "Prénom".into(), family: "Nom".into() }})
-            .collect::<Vec<_>>();
+            .map(|image|  ( image.into(), Name { given: "Prénom".into(), family: "Nom".into() }))
+            .collect::<HashMap<_, _>>();
         let new_cache_file_state = State(new_cache_file_state);
         write_cache_file(&new_cache_file_state, &dir);
     }
@@ -137,14 +139,14 @@ fn read_cache_file(dir: impl AsRef<Path>) -> State {
         .unwrap();
 
     let lines = cache_contents.lines();
-    let items: Vec<Item> = lines
+    let items: HashMap<String, Name> = lines
         .enumerate()
         .map(|(n, line)| (n, line, line.split(',').map(str::trim)) )
         .map(|(n, line, line_components)| {
             let [filename, name, surname] = line_components.collect::<Vec<_>>()[..] else {
                 panic!("Wrong number of commas on line {n} of cache file: '{line}'", n=n+1)
             };
-            Item::new(filename, name, surname)
+            (filename.into(), Name { given: name.into(), family: surname.into() })
         })
         .collect();
     State(items)
@@ -153,7 +155,7 @@ fn read_cache_file(dir: impl AsRef<Path>) -> State {
 fn write_cache_file(state: &State, dir: impl AsRef<Path>) {
     let contents = state.0
         .iter()
-        .map(|Item { image, name }| format!("{image}, {}, {}", name.given, name.family))
+        .map(|(image, Name { given, family })| format!("{image}, {given}, {family}"))
         .collect::<Vec<_>>()
         .join("\n");
     std::fs::write(cache_file_for_dir(dir), contents + "\n").unwrap();
