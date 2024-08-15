@@ -48,10 +48,7 @@
                 pkgs.cargo-nextest
                 pkgs.bacon
                 pkgs.just
-                pkgs.wasm-bindgen-cli
-                pkgs.openssl
                 pkgs.pkg-config
-                pkgs.dioxus-cli
               ];
               packages = [
                 pkgs.lolcat
