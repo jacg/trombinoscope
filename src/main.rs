@@ -31,7 +31,6 @@ fn render_items(items: &[Item], dir: impl AsRef<Path>) {
         .iter()
         .cloned()
         .map(Some)
-        .chain(vec![None; 24])
         .collect::<Vec<_>>();
     items.sort_by(option_family_given);
     render_padded_items(&items, &dir);
@@ -45,16 +44,25 @@ fn render_padded_items(items: &[Option<Item>], class_dir: impl AsRef<Path>) {
         format!("[#text([{given}], stroke: none, fill: colA) #h(1mm) #text([{family}], stroke: none, fill: colB)],\n") }
     else { "[],".into() };
 
-    macro_rules! make_row {
-        ($bounds:expr) => {(
-            items[$bounds].iter().map(pic ).collect::<Vec<_>>().join(""),
-            items[$bounds].iter().map(name).collect::<Vec<_>>().join("")
-        )};
-    }
-    let (row_1_pics, row_1_names)  = make_row![  .. 6];
-    let (row_2_pics, row_2_names)  = make_row![ 6..12];
-    let (row_3_pics, row_3_names)  = make_row![12..18];
-    let (row_4_pics, row_4_names)  = make_row![18..24];
+    let make_row = |range: std::ops::Range<usize>| {
+        let len = items.len();
+        if len <= range.start { ("".into(), "".into()) } else {
+
+            let npad = if len > range.end { 0 } else { range.end - len };
+            let (lo, hi) = (range.start.min(len), range.end.min(len));
+
+            (
+                items[lo..hi].iter().map(pic ).chain(vec!["[],".into(); npad]).collect::<Vec<_>>().join(""),
+                items[lo..hi].iter().map(name)                                .collect::<Vec<_>>().join("")
+            )
+        }
+
+    };
+    let w = 6;
+    let (row_1_pics, row_1_names)  = make_row(  0..w*1);
+    let (row_2_pics, row_2_names)  = make_row(w*1..w*2);
+    let (row_3_pics, row_3_names)  = make_row(w*2..w*3);
+    let (row_4_pics, row_4_names)  = make_row(w*3..w*4);
 
     let table = format!(r#"
   {row_1_pics} {row_1_names} 
@@ -83,9 +91,9 @@ fn render_padded_items(items: &[Option<Item>], class_dir: impl AsRef<Path>) {
     fs::write(&trombi_pdf, pdf).expect("Error writing PDF.");
     println!("Created pdf: `{}`", trombi_pdf.display());
 
-    // let mut out = fs::File::create("generated.typ").unwrap();
-    // use std::io::Write;
-    // out.write_all(content.as_bytes()).unwrap();
+    let mut out = fs::File::create("generated.typ").unwrap();
+    use std::io::Write;
+    out.write_all(content.as_bytes()).unwrap();
 
 }
 
