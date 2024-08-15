@@ -26,23 +26,14 @@ fn main() {
     render_items(&items, &class_dir);
 }
 
-fn render_items(items: &[Item], dir: impl AsRef<Path>) {
-    let mut items = items
-        .iter()
-        .cloned()
-        .map(Some)
-        .collect::<Vec<_>>();
-    items.sort_by(option_family_given);
-    render_padded_items(&items, &dir);
-}
-
-fn render_padded_items(items: &[Option<Item>], class_dir: impl AsRef<Path>) {
-    let pic  = |i: &Option<Item>| if let Some(j) = i { format!(r#"image("{img}.jpg", width: 100%),"#, img=j.image.display()) } else { "[],".into() };
-    let name = |i: &Option<Item>| if let Some(i) = i {
+fn render_items(items: &[Item], class_dir: impl AsRef<Path>) {
+    let mut items = items.to_vec();
+    items.sort_by(family_given);
+    let pic  = |i: &Item| { format!(r#"image("{img}.jpg", width: 100%),"#, img=i.image.display()) };
+    let name = |i: &Item| {
         let Name { given, family } = &i.name;
         let family = family.to_uppercase();
-        format!("[#text([{given}], stroke: none, fill: colA) #h(1mm) #text([{family}], stroke: none, fill: colB)],\n") }
-    else { "[],".into() };
+        format!("[#text([{given}], stroke: none, fill: colA) #h(1mm) #text([{family}], stroke: none, fill: colB)],\n") };
 
     let make_row = |range: std::ops::Range<usize>| {
         let len = items.len();
@@ -105,13 +96,10 @@ fn trombi_file_for_dir(dir: impl AsRef<Path>, ftype: FileType) -> PathBuf {
     })
 }
 
-fn option_family_given(l: &Option<Item>, r: &Option<Item>) -> Ordering {
+fn family_given(l: &Item, r: &Item) -> Ordering {
     use std::cmp::Ordering::*;
     match (l,r) {
-        (None, None) => Equal,
-        (None, Some(_)) => Greater,
-        (Some(_), None) => Less,
-        (Some(Item { name: l, .. }), Some(Item { name: r, .. })) => {
+        (Item { name: l, .. }, Item { name: r, .. }) => {
             match l.family.to_uppercase().cmp(&r.family.to_uppercase()) {
                 Equal => l.given.to_uppercase().cmp(&r.given.to_uppercase()),
                 different => different,
