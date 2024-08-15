@@ -10,6 +10,7 @@ use trombinoscope::TypstWrapperWorld;
 #[derive(Debug, Clone)] struct Name { given: String, family: String }
 #[derive(Debug, Clone)] struct Item { image: String, name: Name }
 #[derive(Debug       )] struct State(HashMap<String, Name>);
+#[derive(Debug, Clone)] enum FileType { Cache, Trombi, Labels }
 
 impl State {
     fn iter_items(&self) -> impl Iterator<Item = Item> + '_ {
@@ -62,10 +63,11 @@ fn render_items(items: &[Option<Item>], class_data_dir: impl AsRef<Path>) {
     let mut tracer = Tracer::default();
     let document = typst::compile(&world, &mut tracer).expect("Trombinoscope Error compiling typst.");
 
-    // Output to pdf and svg
+    // Output to pdf
     let pdf = typst_pdf::pdf(&document, Smart::Auto, None);
-    fs::write("./output.pdf", pdf).expect("Error writing PDF.");
-    println!("Created pdf: `./output.pdf`");
+    let trombi_pdf = trombi_file_for_dir(&class_data_dir, FileType::Trombi);
+    fs::write(&trombi_pdf, pdf).expect("Error writing PDF.");
+    println!("Created pdf: `{}`", trombi_pdf.display());
 
     // let mut out = fs::File::create("generated.typ").unwrap();
     // out.write_all(content.as_bytes()).unwrap();
@@ -88,8 +90,13 @@ fn main() {
     write_cache_file(&state, &class_data_dir);
 }
 
-fn cache_file_for_dir(dir: impl AsRef<Path>) -> PathBuf {
-    dir.as_ref().join(".cache")
+fn trombi_file_for_dir(dir: impl AsRef<Path>, ftype: FileType) -> PathBuf {
+    use FileType::*;
+    dir.as_ref().join(match ftype {
+        Cache => ".trombi-cache",
+        Trombi => "trombinoscope.pdf",
+        Labels => "étiquettes.pdf",
+    })
 }
 
 fn render_state(state: &State, dir: impl AsRef<Path>) {
@@ -138,7 +145,7 @@ fn header(classe: &str) -> String {
 }
 
 fn ensure_cache_file(dir: impl AsRef<Path>) {
-    let cache_file = cache_file_for_dir(&dir);
+    let cache_file = trombi_file_for_dir(&dir, FileType::Cache);
     if ! cache_file.exists() {
         let new_cache_file_state = find_image_prefixes_in_dir(&dir)
             .iter()
@@ -150,7 +157,7 @@ fn ensure_cache_file(dir: impl AsRef<Path>) {
 }
 
 fn read_cache_file(dir: impl AsRef<Path>) -> State {
-    let cache_contents = std::fs::read_to_string(cache_file_for_dir(&dir))
+    let cache_contents = std::fs::read_to_string(trombi_file_for_dir(&dir, FileType::Cache))
         .unwrap();
 
     let lines = cache_contents.lines();
@@ -173,7 +180,7 @@ fn write_cache_file(state: &State, dir: impl AsRef<Path>) {
         .map(|(image, Name { given, family })| format!("{image}, {given}, {family}"))
         .collect::<Vec<_>>()
         .join("\n");
-    std::fs::write(cache_file_for_dir(dir), contents + "\n").unwrap();
+    std::fs::write(trombi_file_for_dir(dir, FileType::Cache), contents + "\n").unwrap();
 }
 
 fn find_image_prefixes_in_dir(dir: impl AsRef<Path>) -> Vec<String> {
