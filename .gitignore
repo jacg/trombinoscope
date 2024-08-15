@@ -6,3 +6,4 @@ tmp/
 /target/
 /dist/
 /output.pdf
+/generated.typ
