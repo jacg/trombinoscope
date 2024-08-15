@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs;
@@ -106,21 +107,24 @@ fn render_state(state: &State, dir: impl AsRef<Path>) {
         .chain(vec![None; 24])
     .collect::<Vec<_>>();
 
-    items.sort_by(|l,r| {
-        use std::cmp::Ordering::*;
-        match (l,r) {
-            (None, None) => Equal,
-            (None, Some(_)) => Greater,
-            (Some(_), None) => Less,
-            (Some(Item { name: l, .. }), Some(Item { name: r, .. })) => {
-                match l.family.cmp(&r.family) {
-                    Equal => l.given.cmp(&r.given),
-                    different => different,
-                }
-            }
-        }});
+    items.sort_by(option_family_given);
 
     render_items(&items, &dir);
+}
+
+fn option_family_given(l: &Option<Item>, r: &Option<Item>) -> Ordering {
+    use std::cmp::Ordering::*;
+    match (l,r) {
+        (None, None) => Equal,
+        (None, Some(_)) => Greater,
+        (Some(_), None) => Less,
+        (Some(Item { name: l, .. }), Some(Item { name: r, .. })) => {
+            match l.family.to_uppercase().cmp(&r.family.to_uppercase()) {
+                Equal => l.given.to_uppercase().cmp(&r.given.to_uppercase()),
+                different => different,
+            }
+        }
+    }
 }
 
 fn header(classe: &str) -> String {
