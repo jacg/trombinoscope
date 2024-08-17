@@ -5,6 +5,9 @@ use std::path::{Path, PathBuf};
 
 use typst::foundations::Smart;
 use typst::eval::Tracer;
+
+use native_dialog::{FileDialog, MessageDialog, MessageType};
+
 use trombinoscope::TypstWrapperWorld;
 
 #[derive(Debug, Clone)] struct Name { given: String, family: String }
@@ -12,11 +15,27 @@ use trombinoscope::TypstWrapperWorld;
 #[derive(Debug, Clone)] enum FileType { Trombi, Labels }
 
 fn main() {
+
     let mut args = std::env::args();
     let _executable = args.next();
 
-    let class_dir: PathBuf = if let Some(dir) = args.next() { dir }
-    else { panic!("Pass the directory containing the class photographs as first CLI argument"); }.into();
+    let class_dir: PathBuf = if let Some(dir) = args.next() { dir.into() }
+    else {
+
+        MessageDialog::new()
+            .set_type(MessageType::Info)
+            .set_title("Instructions trombinoscope")
+            .set_text("Chosissez le dossier contenant les photos de la classe dans le dialogue qui suit.")
+            .show_alert()
+            .unwrap();
+
+
+        FileDialog::new()
+            .set_location("~/src/trombinoscope/data")
+            .show_open_single_dir()
+            .unwrap()
+            .unwrap()
+    };
 
     let items = find_image_prefixes_in_dir(&class_dir)
         .iter()
@@ -79,8 +98,17 @@ fn render_items(items: &[Item], class_dir: impl AsRef<Path>) {
     // Output to pdf
     let pdf = typst_pdf::pdf(&document, Smart::Auto, None);
     let trombi_pdf = trombi_file_for_dir(&class_dir, FileType::Trombi);
+    let trombi_pdf_display = trombi_pdf.display();
     fs::write(&trombi_pdf, pdf).expect("Error writing PDF.");
-    println!("Created pdf: `{}`", trombi_pdf.display());
+
+    MessageDialog::new()
+        .set_type(MessageType::Info)
+        .set_title("Trombinoscope crée avec succès")
+        .set_text(&format!("Le tormbinoscope a été crée dans `{trombi_pdf_display}`."))
+        .show_alert()
+        .unwrap();
+
+    println!("Created pdf: `{trombi_pdf_display}`");
 
     let mut out = fs::File::create("generated.typ").unwrap();
     use std::io::Write;

@@ -49,6 +49,7 @@
                 pkgs.bacon
                 pkgs.just
                 pkgs.pkg-config
+                pkgs.libsForQt5.kdialog
               ];
               packages = [
                 pkgs.lolcat
