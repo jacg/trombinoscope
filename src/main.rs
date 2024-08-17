@@ -145,7 +145,7 @@ fn file_stem_to_item(image: &str) -> Item {
         image: image.into(),
         name: Name {
             given: split.next().unwrap().trim().into(),
-            family: if let Some(name) = split.next() { name.trim() } else { "Manque de `@` en nom de fichier" }.into()
+            family: if let Some(name) = split.next() { name.trim() } else { "Séparer prénom du nom par un `@`" }.into(),
         }
     }
 }
