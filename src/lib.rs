@@ -214,21 +214,9 @@ impl typst::World for TypstWrapperWorld {
 
 /// Helper function
 fn fonts() -> Vec<Font> {
-    std::fs::read_dir("fonts")
-        .unwrap()
-        .map(Result::unwrap)
-        .flat_map(|entry| {
-            let path = entry.path();
-            let bytes = std::fs::read(&path).unwrap();
-            let buffer = Bytes::from(bytes);
-            let face_count = ttf_parser::fonts_in_collection(&buffer).unwrap_or(1);
-            (0..face_count).map(move |face| {
-                Font::new(buffer.clone(), face).unwrap_or_else(|| {
-                    panic!("failed to load font from {path:?} (face index {face})")
-                })
-            })
-        })
-        .collect()
+    let bytes = include_bytes!("../fonts/Inconsolata-Black.ttf");
+    let buffer = Bytes::from_static(bytes);
+    vec![Font::new(buffer, 0).unwrap()]
 }
 
 fn retry<T, E>(mut f: impl FnMut() -> Result<T, E>) -> Result<T, E> {
