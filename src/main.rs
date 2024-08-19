@@ -19,7 +19,7 @@ fn main() {
     let mut args = std::env::args();
     let _executable = args.next();
 
-    let class_dir: PathBuf = if let Some(dir) = args.next() { dir.into() }
+    let (class_dir, gui): (PathBuf, bool) = if let Some(dir) = args.next() { (dir.into(), false) }
     else {
 
         MessageDialog::new()
@@ -30,11 +30,12 @@ fn main() {
             .unwrap();
 
 
-        FileDialog::new()
+        (FileDialog::new()
             .set_location("~/src/trombinoscope/data")
             .show_open_single_dir()
             .unwrap()
-            .unwrap()
+            .unwrap(),
+        true)
     };
 
     let items = find_image_prefixes_in_dir(&class_dir)
@@ -42,10 +43,10 @@ fn main() {
         .map(|x| file_stem_to_item(x)) // Why does eta-conversion cause type error?
         .collect::<Vec<_>>();
 
-    render_items(&items, &class_dir);
+    render_items(&items, &class_dir, gui);
 }
 
-fn render_items(items: &[Item], class_dir: impl AsRef<Path>) {
+fn render_items(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) {
     let mut items = items.to_vec();
     items.sort_by(family_given);
     let pic  = |i: &Item| { format!(r#"image("{img}.jpg", width: 100%),"#, img=i.image.display()) };
@@ -101,14 +102,15 @@ fn render_items(items: &[Item], class_dir: impl AsRef<Path>) {
     let trombi_pdf_display = trombi_pdf.display();
     fs::write(&trombi_pdf, pdf).expect("Error writing PDF.");
 
-    MessageDialog::new()
-        .set_type(MessageType::Info)
-        .set_title("Trombinoscope crée avec succès")
-        .set_text(&format!("Le tormbinoscope a été crée dans `{trombi_pdf_display}`."))
-        .show_alert()
-        .unwrap();
-
-    println!("Created pdf: `{trombi_pdf_display}`");
+    println!("Trombinoscope généré dans: `{trombi_pdf_display}`");
+    if use_gui {
+        MessageDialog::new()
+            .set_type(MessageType::Info)
+            .set_title("Trombinoscope crée avec succès")
+            .set_text(&format!("Le tormbinoscope a été crée dans `{trombi_pdf_display}`."))
+            .show_alert()
+            .unwrap();
+    }
 
     let mut out = fs::File::create("generated.typ").unwrap();
     use std::io::Write;
