@@ -133,11 +133,11 @@ fn labels_typst_src(items: &[Item], class_dir: impl AsRef<Path>) -> String {
 }
 
 fn trombi_typst_src(items: &[Item], class_dir: impl AsRef<Path>) -> String {
-    let pic  = |i: &Item| { format!("\n    image(\"{img}.jpg\", width: 100%),", img=i.image.display()) };
+    let pic  = |i: &Item| { format!("\n    pic(\"{img}.jpg\"),", img=i.image.display()) };
     let name = |i: &Item| {
         let Name { given, family } = &i.name;
         let family = family.to_uppercase();
-        format!("\n    [#text([{given}], stroke: none, fill: colG) #h(1mm) #text([{family}], stroke: none, fill: colF)],")
+        format!("\n    label([{given}], [{family}]),")
     };
 
     let make_row = |range: std::ops::Range<usize>| {
@@ -210,6 +210,13 @@ fn header(classe: &str) -> String {
 #align(center, text([CLASSE {classe}], size: 50pt))
 
 #v(-8mm) // TODO find sensible way of reducing space before table
+
+#let pic(path) = image(path, width: 100%)
+
+#let label(given, family) = [
+    #text(given , stroke: none, fill: colG) #h(1mm)
+    #text(family, stroke: none, fill: colF)
+]
 
 #table(
     columns: 6,
