@@ -10,16 +10,16 @@ use native_dialog::{FileDialog, MessageDialog, MessageType};
 
 use trombinoscope::TypstWrapperWorld;
 
-#[derive(Debug, Clone)] struct Name { given: String, family: String }
-#[derive(Debug, Clone)] struct Item { image: PathBuf, name: Name }
-#[derive(Debug, Clone)] enum FileType { Trombi, Labels }
+#[derive(Debug, Clone)      ] struct Name { given: String, family: String }
+#[derive(Debug, Clone)      ] struct Item { image: PathBuf, name: Name }
+#[derive(Debug, Clone, Copy)] enum FileType { Trombi, Labels }
 
 fn main() {
 
     let mut args = std::env::args();
     let _executable = args.next();
 
-    let (class_dir, gui): (PathBuf, bool) = if let Some(dir) = args.next() { (dir.into(), false) }
+    let (class_dir, use_gui): (PathBuf, bool) = if let Some(dir) = args.next() { (dir.into(), false) }
     else {
 
         MessageDialog::new()
@@ -43,19 +43,52 @@ fn main() {
         .map(|x| file_stem_to_item(x)) // Why does eta-conversion cause type error?
         .collect::<Vec<_>>();
 
-    render_both_pdfs(&items, &class_dir, gui);
-}
-
-fn render_both_pdfs(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) {
     let mut items = items.to_vec();
     items.sort_by(family_given);
-    render_trombinoscope(&items, &class_dir, use_gui);
-    render_labels       (&items, &class_dir, use_gui);
+
+    render(trombi_typst_src(&items, &class_dir, use_gui) , &class_dir, FileType::Trombi, use_gui);
+    render(labels_typst_src(&items, &class_dir, use_gui) , &class_dir, FileType::Labels, use_gui);
 }
 
-fn render_labels(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) {
+fn render(content: String, class_dir: impl AsRef<Path>, ftype: FileType, use_gui: bool) {
+    let which = match ftype {
+        FileType::Trombi => "tombinoscope",
+        FileType::Labels => "labels",
+    };
+
+    let mut out = fs::File::create(format!("generated-{which}.typ")).unwrap();
+    use std::io::Write;
+    out.write_all(content.as_bytes()).unwrap();
+
+    // Create world with content.
+    let world = TypstWrapperWorld::new(class_dir.as_ref().display().to_string(), content.clone());
+
+    // Render document
+    let mut tracer = Tracer::default();
+    let document = typst::compile(&world, &mut tracer).expect("Error compiling typst {which}.");
+
+    // Output to pdf
+    let pdf_bytes = typst_pdf::pdf(&document, Smart::Auto, None);
+
+    let pdf_path = trombi_file_for_dir(&class_dir, ftype);
+    let pdf_path_display = pdf_path.display();
+
+    fs::write(&pdf_path, pdf_bytes).unwrap_or_else(|_| panic!("Error writing {pdf_path_display}."));
+
+    println!("{which} généré dans: `{pdf_path_display}`");
+    if use_gui {
+        MessageDialog::new()
+            .set_type(MessageType::Info)
+            .set_title("Trombinoscope crée avec succès")
+            .set_text(&format!("Le tormbinoscope a été crée dans `{pdf_path_display}`."))
+            .show_alert()
+            .unwrap();
+    }
+}
+
+fn labels_typst_src(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) -> String {
     let institution = "CO Montbrillant";
-    let class = "SPONG";
+    let class = class_from_dir(&class_dir);
     let label = |given, family| format!("label([{given}], [{family}])");
     let labels = items
         .iter()
@@ -63,7 +96,7 @@ fn render_labels(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) {
         .collect::<Vec<_>>()
         .join(",\n");
 
-    let content = format!{r#"
+    format!{r#"
 #set page(
   paper: "a4",
   margin: (top: 10mm, bottom: 4mm, left: 5mm, right: 5mm),
@@ -87,35 +120,16 @@ fn render_labels(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) {
    }}
 }}
 
-#let label = curry_label([CO Montbrillant], [classe 1111])
+#let label = curry_label([{institution}], [Classe {class}])
 
 #table(
     columns: 2,
     align: center + horizon,
     {labels}
-)"#};
-
-    let mut out = fs::File::create("generated-labels.typ").unwrap();
-    use std::io::Write;
-    out.write_all(content.as_bytes()).unwrap();
-
-    // Create world with content.
-    let world = TypstWrapperWorld::new(class_dir.as_ref().display().to_string(), content.clone());
-
-    // Render document
-    let mut tracer = Tracer::default();
-    let document = typst::compile(&world, &mut tracer).expect("Trombinoscope Error compiling typst.");
-
-    // Output to pdf
-    let pdf = typst_pdf::pdf(&document, Smart::Auto, None);
-
-    let labels_pdf = trombi_file_for_dir(&class_dir, FileType::Labels);
-    let labels_pdf_display = labels_pdf.display();
-    fs::write(&labels_pdf, pdf).expect("Error writing labels PDF.");
-
+)"#}
 }
 
-fn render_trombinoscope(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) {
+fn trombi_typst_src(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) -> String {
     let pic  = |i: &Item| { format!(r#"image("{img}.jpg", width: 100%),"#, img=i.image.display()) };
     let name = |i: &Item| {
         let Name { given, family } = &i.name;
@@ -150,39 +164,16 @@ fn render_trombinoscope(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bo
   {row_4_pics} {row_4_names}
 "#);
 
-    let std::path::Component::Normal(class) = class_dir.as_ref().components().last().unwrap()
-        else { panic!("Last component of `{dir}` cannot be interpreted as a class name", dir = class_dir.as_ref().display()) };
+    let class = class_from_dir(&class_dir);
 
-    let class = class.to_str().unwrap();
+    format!("{header}{table})", header = header(&class))
+}
 
-    let content = format!("{header}{table})", header = header(class));
+fn class_from_dir(dir: impl AsRef<Path>) -> String {
+    let std::path::Component::Normal(class) = dir.as_ref().components().last().unwrap()
+        else { panic!("Last component of `{dir}` cannot be interpreted as a class name", dir = dir.as_ref().display()) };
 
-    // Create world with content.
-    let world = TypstWrapperWorld::new(class_dir.as_ref().display().to_string(), content.clone());
-
-    // Render document
-    let mut tracer = Tracer::default();
-    let document = typst::compile(&world, &mut tracer).expect("Trombinoscope Error compiling typst.");
-
-    // Output to pdf
-    let pdf = typst_pdf::pdf(&document, Smart::Auto, None);
-    let trombi_pdf = trombi_file_for_dir(&class_dir, FileType::Trombi);
-    let trombi_pdf_display = trombi_pdf.display();
-    fs::write(&trombi_pdf, pdf).expect("Error writing trombinoscope PDF.");
-
-    println!("Trombinoscope généré dans: `{trombi_pdf_display}`");
-    if use_gui {
-        MessageDialog::new()
-            .set_type(MessageType::Info)
-            .set_title("Trombinoscope crée avec succès")
-            .set_text(&format!("Le tormbinoscope a été crée dans `{trombi_pdf_display}`."))
-            .show_alert()
-            .unwrap();
-    }
-
-    let mut out = fs::File::create("generated-trombi.typ").unwrap();
-    use std::io::Write;
-    out.write_all(content.as_bytes()).unwrap();
+    class.to_str().unwrap().into()
 }
 
 fn trombi_file_for_dir(dir: impl AsRef<Path>, ftype: FileType) -> PathBuf {
