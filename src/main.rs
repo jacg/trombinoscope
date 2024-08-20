@@ -21,14 +21,12 @@ fn main() {
 
     let (class_dir, use_gui): (PathBuf, bool) = if let Some(dir) = args.next() { (dir.into(), false) }
     else {
-
         MessageDialog::new()
             .set_type(MessageType::Info)
-            .set_title("Instructions trombinoscope")
+            .set_title("Choix de dossier")
             .set_text("Chosissez le dossier contenant les photos de la classe dans le dialogue qui suit.")
             .show_alert()
             .unwrap();
-
 
         (FileDialog::new()
             .set_location("~/src/trombinoscope/data")
@@ -46,17 +44,17 @@ fn main() {
     let mut items = items.to_vec();
     items.sort_by(family_given);
 
-    render(trombi_typst_src(&items, &class_dir, use_gui) , &class_dir, FileType::Trombi, use_gui);
-    render(labels_typst_src(&items, &class_dir, use_gui) , &class_dir, FileType::Labels, use_gui);
+    render(trombi_typst_src(&items, &class_dir) , &class_dir, FileType::Trombi, use_gui);
+    render(labels_typst_src(&items, &class_dir) , &class_dir, FileType::Labels, use_gui);
 }
 
 fn render(content: String, class_dir: impl AsRef<Path>, ftype: FileType, use_gui: bool) {
-    let which = match ftype {
+    let typst_src = format!("generated-{}.typ", match ftype {
         FileType::Trombi => "tombinoscope",
-        FileType::Labels => "labels",
-    };
+        FileType::Labels => "étiquettes",
+    });
 
-    let mut out = fs::File::create(format!("generated-{which}.typ")).unwrap();
+    let mut out = fs::File::create(&typst_src).unwrap();
     use std::io::Write;
     out.write_all(content.as_bytes()).unwrap();
 
@@ -65,7 +63,10 @@ fn render(content: String, class_dir: impl AsRef<Path>, ftype: FileType, use_gui
 
     // Render document
     let mut tracer = Tracer::default();
-    let document = typst::compile(&world, &mut tracer).expect("Error compiling typst {which}.");
+    let document = typst::compile(&world, &mut tracer)
+        .unwrap_or_else(|err| {
+            panic!("\nError compiling typst source `{typst_src}`:\n{err:?}\n")
+        });
 
     // Output to pdf
     let pdf_bytes = typst_pdf::pdf(&document, Smart::Auto, None);
@@ -73,20 +74,22 @@ fn render(content: String, class_dir: impl AsRef<Path>, ftype: FileType, use_gui
     let pdf_path = trombi_file_for_dir(&class_dir, ftype);
     let pdf_path_display = pdf_path.display();
 
-    fs::write(&pdf_path, pdf_bytes).unwrap_or_else(|_| panic!("Error writing {pdf_path_display}."));
+    fs::write(&pdf_path, pdf_bytes)
+        .unwrap_or_else(|err| panic!("Error writing {pdf_path_display}:\n{err:?}"));
 
-    println!("{which} généré dans: `{pdf_path_display}`");
+    let msg = &format!("PDF généré: `{pdf_path_display}`.");
+    println!("{msg}");
     if use_gui {
         MessageDialog::new()
             .set_type(MessageType::Info)
-            .set_title("Trombinoscope crée avec succès")
-            .set_text(&format!("Le tormbinoscope a été crée dans `{pdf_path_display}`."))
+            .set_title("PDF généré avec succès")
+            .set_text(msg)
             .show_alert()
             .unwrap();
     }
 }
 
-fn labels_typst_src(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) -> String {
+fn labels_typst_src(items: &[Item], class_dir: impl AsRef<Path>) -> String {
     let institution = "CO Montbrillant";
     let class = class_from_dir(&class_dir);
     let label = |given, family| format!("label([{given}], [{family}])");
@@ -94,17 +97,16 @@ fn labels_typst_src(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) 
         .iter()
         .map(|i| label(i.name.given.clone(), i.name.family.clone()))
         .collect::<Vec<_>>()
-        .join(",\n");
+        .join(",\n    ");
 
-    format!{r#"
-#set page(
+    format!{r#"#set page(
   paper: "a4",
   margin: (top: 10mm, bottom: 4mm, left: 5mm, right: 5mm),
 )
-#set text(size: 23pt)
-#set text(font: "Inconsolata", weight: "black")
-#let colA = rgb(150,0,0)
-#let colB = rgb(0,0,150)
+#set text(size: 23pt, font: "Inconsolata", weight: "black")
+
+#let colG = rgb(150,0,0)
+#let colF = rgb(0,0,150)
 
 #let curry_label(institution, class) = {{
     (given, family) => {{
@@ -112,10 +114,10 @@ fn labels_typst_src(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) 
         stack(
         dir: ttb,
         rect(),
-        rect(align(bottom, upper[#family])),
-        rect()[#given],
-        rect()[#class],
-        rect()[#institution],
+        rect(align(bottom, text(stroke: none, fill: colF, upper[#family]))),
+        rect(              text(stroke: none, fill: colG,      [#given])),
+        rect(                                                  [#class]),
+        rect(                                                  [#institution]),
        )
    }}
 }}
@@ -125,16 +127,17 @@ fn labels_typst_src(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) 
 #table(
     columns: 2,
     align: center + horizon,
+
     {labels}
 )"#}
 }
 
-fn trombi_typst_src(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) -> String {
-    let pic  = |i: &Item| { format!(r#"image("{img}.jpg", width: 100%),"#, img=i.image.display()) };
+fn trombi_typst_src(items: &[Item], class_dir: impl AsRef<Path>) -> String {
+    let pic  = |i: &Item| { format!("\n    image(\"{img}.jpg\", width: 100%),", img=i.image.display()) };
     let name = |i: &Item| {
         let Name { given, family } = &i.name;
         let family = family.to_uppercase();
-        format!("[#text([{given}], stroke: none, fill: colA) #h(1mm) #text([{family}], stroke: none, fill: colB)],\n")
+        format!("\n    [#text([{given}], stroke: none, fill: colG) #h(1mm) #text([{family}], stroke: none, fill: colF)],")
     };
 
     let make_row = |range: std::ops::Range<usize>| {
@@ -149,8 +152,8 @@ fn trombi_typst_src(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) 
                 items[lo..hi].iter().map(name)                                .collect::<Vec<_>>().join("")
             )
         }
-
     };
+
     let w = 6;
     let (row_1_pics, row_1_names)  = make_row(  0..w*1);
     let (row_2_pics, row_2_names)  = make_row(w*1..w*2);
@@ -158,14 +161,13 @@ fn trombi_typst_src(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) 
     let (row_4_pics, row_4_names)  = make_row(w*3..w*4);
 
     let table = format!(r#"
-  {row_1_pics} {row_1_names} 
-  {row_2_pics} {row_2_names}
-  {row_3_pics} {row_3_names}
-  {row_4_pics} {row_4_names}
+    {row_1_pics} {row_1_names}
+    {row_2_pics} {row_2_names}
+    {row_3_pics} {row_3_names}
+    {row_4_pics} {row_4_names}
 "#);
 
     let class = class_from_dir(&class_dir);
-
     format!("{header}{table})", header = header(&class))
 }
 
@@ -197,24 +199,21 @@ fn family_given(l: &Item, r: &Item) -> Ordering {
 }
 
 fn header(classe: &str) -> String {
-    format!(r#"
-#set page(
+    format!(r#"#set page(
   paper: "a4",
   margin: (top: 10mm, bottom: 4mm, left: 5mm, right: 5mm),
 )
 
-#let colA = rgb(150,0,0)
-#let colB = rgb(0,0,150)
+#let colG = rgb(150,0,0)
+#let colF = rgb(0,0,150)
 
 #align(center, text([CLASSE {classe}], size: 50pt))
 
 #v(-8mm) // TODO find sensible way of reducing space before table
 
 #table(
-  columns: 6,
-  align: center + horizon,
-  //stroke: none,
-"#)
+    columns: 6,
+    align: center + horizon,"#)
 }
 
 fn find_image_prefixes_in_dir(dir: impl AsRef<Path>) -> Vec<String> {
