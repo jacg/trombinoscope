@@ -43,17 +43,85 @@ fn main() {
         .map(|x| file_stem_to_item(x)) // Why does eta-conversion cause type error?
         .collect::<Vec<_>>();
 
-    render_items(&items, &class_dir, gui);
+    render_both_pdfs(&items, &class_dir, gui);
 }
 
-fn render_items(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) {
+fn render_both_pdfs(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) {
     let mut items = items.to_vec();
     items.sort_by(family_given);
+    render_trombinoscope(&items, &class_dir, use_gui);
+    render_labels       (&items, &class_dir, use_gui);
+}
+
+fn render_labels(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) {
+    let institution = "CO Montbrillant";
+    let class = "SPONG";
+    let label = |given, family| format!("label([{given}], [{family}])");
+    let labels = items
+        .iter()
+        .map(|i| label(i.name.given.clone(), i.name.family.clone()))
+        .collect::<Vec<_>>()
+        .join(",\n");
+
+    let content = format!{r#"
+#set page(
+  paper: "a4",
+  margin: (top: 10mm, bottom: 4mm, left: 5mm, right: 5mm),
+)
+#set text(size: 23pt)
+#set text(font: "Inconsolata", weight: "black")
+#let colA = rgb(150,0,0)
+#let colB = rgb(0,0,150)
+
+#let curry_label(institution, class) = {{
+    (given, family) => {{
+        set rect(width: 10cm, height: 13.3mm, stroke: none)
+        stack(
+        dir: ttb,
+        rect(),
+        rect(align(bottom, upper[#family])),
+        rect()[#given],
+        rect()[#class],
+        rect()[#institution],
+       )
+   }}
+}}
+
+#let label = curry_label([CO Montbrillant], [classe 1111])
+
+#table(
+    columns: 2,
+    align: center + horizon,
+    {labels}
+)"#};
+
+    let mut out = fs::File::create("generated-labels.typ").unwrap();
+    use std::io::Write;
+    out.write_all(content.as_bytes()).unwrap();
+
+    // Create world with content.
+    let world = TypstWrapperWorld::new(class_dir.as_ref().display().to_string(), content.clone());
+
+    // Render document
+    let mut tracer = Tracer::default();
+    let document = typst::compile(&world, &mut tracer).expect("Trombinoscope Error compiling typst.");
+
+    // Output to pdf
+    let pdf = typst_pdf::pdf(&document, Smart::Auto, None);
+
+    let labels_pdf = trombi_file_for_dir(&class_dir, FileType::Labels);
+    let labels_pdf_display = labels_pdf.display();
+    fs::write(&labels_pdf, pdf).expect("Error writing labels PDF.");
+
+}
+
+fn render_trombinoscope(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) {
     let pic  = |i: &Item| { format!(r#"image("{img}.jpg", width: 100%),"#, img=i.image.display()) };
     let name = |i: &Item| {
         let Name { given, family } = &i.name;
         let family = family.to_uppercase();
-        format!("[#text([{given}], stroke: none, fill: colA) #h(1mm) #text([{family}], stroke: none, fill: colB)],\n") };
+        format!("[#text([{given}], stroke: none, fill: colA) #h(1mm) #text([{family}], stroke: none, fill: colB)],\n")
+    };
 
     let make_row = |range: std::ops::Range<usize>| {
         let len = items.len();
@@ -100,7 +168,7 @@ fn render_items(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) {
     let pdf = typst_pdf::pdf(&document, Smart::Auto, None);
     let trombi_pdf = trombi_file_for_dir(&class_dir, FileType::Trombi);
     let trombi_pdf_display = trombi_pdf.display();
-    fs::write(&trombi_pdf, pdf).expect("Error writing PDF.");
+    fs::write(&trombi_pdf, pdf).expect("Error writing trombinoscope PDF.");
 
     println!("Trombinoscope généré dans: `{trombi_pdf_display}`");
     if use_gui {
@@ -112,10 +180,9 @@ fn render_items(items: &[Item], class_dir: impl AsRef<Path>, use_gui: bool) {
             .unwrap();
     }
 
-    let mut out = fs::File::create("generated.typ").unwrap();
+    let mut out = fs::File::create("generated-trombi.typ").unwrap();
     use std::io::Write;
     out.write_all(content.as_bytes()).unwrap();
-
 }
 
 fn trombi_file_for_dir(dir: impl AsRef<Path>, ftype: FileType) -> PathBuf {
