@@ -36,9 +36,10 @@ fn main() {
         true)
     };
 
-    let items = find_image_prefixes_in_dir(&class_dir)
+
+    let items = find_jpgs_in_dir(&class_dir)
         .iter()
-        .map(|x| file_stem_to_item(x)) // Why does eta-conversion cause type error?
+        .filter_map(path_to_item)
         .collect::<Vec<_>>();
 
     let mut items = items.to_vec();
@@ -133,7 +134,7 @@ fn labels_typst_src(items: &[Item], class_dir: impl AsRef<Path>) -> String {
 }
 
 fn trombi_typst_src(items: &[Item], class_dir: impl AsRef<Path>) -> String {
-    let pic  = |i: &Item| { format!("\n    pic(\"{img}.jpg\"),", img=i.image.display()) };
+    let pic  = |i: &Item| { format!("\n    pic(\"{img}\"),", img=i.image.display()) };
     let name = |i: &Item| {
         let Name { given, family } = &i.name;
         let family = family.to_uppercase();
@@ -223,23 +224,35 @@ fn header(classe: &str) -> String {
     align: center + horizon,"#)
 }
 
-fn find_image_prefixes_in_dir(dir: impl AsRef<Path>) -> Vec<String> {
+fn find_jpgs_in_dir(dir: impl AsRef<Path>) -> Vec<PathBuf> {
     std::fs::read_dir(dir)
         .unwrap()
         .map(|res| res.map(|e| e.path()).unwrap())
-        .filter(|path| path.extension() == Some(OsStr::new("jpg")))
-        .map(|path| path.file_stem().unwrap().to_owned())
-        .map(|file| file.to_str().unwrap().to_owned())
+        .filter(|x| is_jpg(x)) // WTF: eta conversion leads to filter not implementing Iterator!
         .collect()
 }
 
-fn file_stem_to_item(image: &str) -> Item {
-    let mut split = image.split('@');
-    Item {
-        image: image.into(),
+fn is_jpg(path: impl AsRef<Path>) -> bool {
+    if let Some(ref extension) = path.as_ref().extension() {
+        ["jpg", "jpeg", "JPG", "JPEG"]
+            .iter()
+            .map(OsStr::new)
+            .collect::<Vec<_>>()
+            .contains(extension)
+    } else {
+        false
+    }
+}
+
+fn path_to_item(image_path: impl AsRef<Path>) -> Option<Item> {
+    let basename = image_path.as_ref().file_name()?;
+    let stem: String = Path::new(basename).file_stem()?.to_str().map(Into::into)?;
+    let mut split = stem.split('@');
+    Some( Item {
+        image: basename.into(),
         name: Name {
-            given: split.next().unwrap().trim().into(),
+            given: split.next()?.trim().into(),
             family: if let Some(name) = split.next() { name.trim() } else { "Séparer prénom du nom par un `@`" }.into(),
         }
-    }
+    })
 }
