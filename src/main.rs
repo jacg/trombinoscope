@@ -127,7 +127,7 @@ fn labels_typst_src(items: &[Item], class_dir: impl AsRef<Path>) -> String {
 #table(
     columns: 2,
     align: center + horizon,
-
+    stroke: 0.6pt + gray,
     {labels}
 )"#}
 }
@@ -154,7 +154,7 @@ fn trombi_typst_src(items: &[Item], class_dir: impl AsRef<Path>) -> String {
 
 #align(center, text([CLASSE {class}], size: 50pt))
 
-#v(-8mm) // TODO find sensible way of reducing space before table
+#v(-10mm) // TODO find sensible way of reducing space before table
 
 #let pic(path) = image(path, width: 100%)
 
@@ -169,16 +169,18 @@ fn trombi_typst_src(items: &[Item], class_dir: impl AsRef<Path>) -> String {
     set rect(
         width: 200mm / n_columns,
         inset: 5pt,
-        stroke: none,
+        stroke: 0.5pt + gray,
         height: 10mm,
     )
 
+    let given  = text(stroke: none, fill: colG,        given  )
+    let family = text(stroke: none, fill: colF, upper[#family])
+
     stack(
         dir: ttb,
-        rect(pic(path), height: 45mm),
-        rect(align(bottom, text(stroke: none, fill: colG,        given  ))),
-        rect(align(top   , text(stroke: none, fill: colF, upper[#family])),
-             stroke: (bottom: 0.5pt + gray)),
+        rect(pic(path), height: 45mm, stroke: (           bottom: none)),
+        rect(align(bottom, given )  , stroke: (top: none, bottom: none)),
+        rect(align(top   , family)  , stroke: (top: none              )),
     )
 }}
 
@@ -186,6 +188,7 @@ fn trombi_typst_src(items: &[Item], class_dir: impl AsRef<Path>) -> String {
     columns: n_columns,
     align: center + horizon,
     stroke: none,
+    inset: 0pt,
 
 {table_items}
 )
