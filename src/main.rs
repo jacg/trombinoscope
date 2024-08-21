@@ -29,14 +29,16 @@ fn main() {
             .unwrap();
 
         (FileDialog::new()
-            .set_location("~/src/trombinoscope/data")
+            .set_location("~/Echanges/CO-Montbrillant/Prof/ZZZ Photos Eleves COMO/")
             .show_open_single_dir()
             .unwrap()
             .unwrap(),
         true)
     };
 
-    let items = find_jpgs_in_dir(&class_dir)
+    let portrait_dir = class_dir.join("Portrait");
+
+    let items = find_jpgs_in_dir(&portrait_dir)
         .iter()
         .filter_map(path_to_item)
         .collect::<Vec<_>>();
@@ -44,8 +46,9 @@ fn main() {
     let mut items = items.to_vec();
     items.sort_by(family_given);
 
-    render(trombi_typst_src(&items, &class_dir) , &class_dir, FileType::Trombi, use_gui);
-    render(labels_typst_src(&items, &class_dir) , &class_dir, FileType::Labels, use_gui);
+    let class_name = class_from_dir(&class_dir);
+    render(trombi_typst_src(&items, &class_name) , &portrait_dir, FileType::Trombi, use_gui);
+    render(labels_typst_src(&items, &class_name) , &portrait_dir, FileType::Labels, use_gui);
 }
 
 fn render(content: String, class_dir: impl AsRef<Path>, ftype: FileType, use_gui: bool) {
@@ -89,9 +92,9 @@ fn render(content: String, class_dir: impl AsRef<Path>, ftype: FileType, use_gui
     }
 }
 
-fn labels_typst_src(items: &[Item], class_dir: impl AsRef<Path>) -> String {
+fn labels_typst_src(items: &[Item], class_name: &str) -> String {
     let institution = "CO Montbrillant";
-    let class = class_from_dir(&class_dir);
+
     let label = |given, family| format!("label([{given}], [{family}])");
     let labels = items
         .iter()
@@ -122,7 +125,7 @@ fn labels_typst_src(items: &[Item], class_dir: impl AsRef<Path>) -> String {
    }}
 }}
 
-#let label = curry_label([{institution}], [Classe {class}])
+#let label = curry_label([{institution}], [Classe {class_name}])
 
 #table(
     columns: 2,
@@ -132,7 +135,7 @@ fn labels_typst_src(items: &[Item], class_dir: impl AsRef<Path>) -> String {
 )"#}
 }
 
-fn trombi_typst_src(items: &[Item], class_dir: impl AsRef<Path>) -> String {
+fn trombi_typst_src(items: &[Item], class_name: &str) -> String {
 
     let table_items = items
         .iter()
@@ -142,7 +145,6 @@ fn trombi_typst_src(items: &[Item], class_dir: impl AsRef<Path>) -> String {
         .collect::<Vec<_>>()
         .join(",\n");
 
-    let class = class_from_dir(&class_dir);
 
     format!(r#"#set page(
   paper: "a4",
@@ -152,7 +154,7 @@ fn trombi_typst_src(items: &[Item], class_dir: impl AsRef<Path>) -> String {
 #let colG = rgb(150,0,0)
 #let colF = rgb(0,0,150)
 
-#align(center, text([CLASSE {class}], size: 50pt))
+#align(center, text([CLASSE {class_name}], size: 50pt))
 
 #v(-10mm) // TODO find sensible way of reducing space before table
 
