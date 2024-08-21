@@ -38,7 +38,7 @@ fn main() {
 
     let portrait_dir = class_dir.join("Portrait");
 
-    let items = find_jpgs_in_dir(&portrait_dir)
+    let items = find_jpgs_in_dir(portrait_dir)
         .iter()
         .filter_map(path_to_item)
         .collect::<Vec<_>>();
@@ -47,11 +47,11 @@ fn main() {
     items.sort_by(family_given);
 
     let class_name = class_from_dir(&class_dir);
-    render(trombi_typst_src(&items, &class_name) , &portrait_dir, FileType::Trombi, use_gui);
-    render(labels_typst_src(&items, &class_name) , &portrait_dir, FileType::Labels, use_gui);
+    render(trombi_typst_src(&items, &class_name) , &class_dir, FileType::Trombi, use_gui);
+    render(labels_typst_src(&items, &class_name) , &class_dir, FileType::Labels, use_gui);
 }
 
-fn render(content: String, class_dir: impl AsRef<Path>, ftype: FileType, use_gui: bool) {
+fn render(content: String, render_dir: impl AsRef<Path>, ftype: FileType, use_gui: bool) {
     let typst_src = format!("generated-{}.typ", match ftype {
         FileType::Trombi => "tombinoscope",
         FileType::Labels => "étiquettes",
@@ -62,7 +62,7 @@ fn render(content: String, class_dir: impl AsRef<Path>, ftype: FileType, use_gui
     out.write_all(content.as_bytes()).unwrap();
 
     // Create world with content.
-    let world = TypstWrapperWorld::new(class_dir.as_ref().display().to_string(), content.clone());
+    let world = TypstWrapperWorld::new(render_dir.as_ref().display().to_string(), content.clone());
 
     // Render document
     let mut tracer = Tracer::default();
@@ -74,7 +74,7 @@ fn render(content: String, class_dir: impl AsRef<Path>, ftype: FileType, use_gui
     // Output to pdf
     let pdf_bytes = typst_pdf::pdf(&document, Smart::Auto, None);
 
-    let pdf_path = trombi_file_for_dir(&class_dir, ftype);
+    let pdf_path = trombi_file_for_dir(&render_dir, ftype);
     let pdf_path_display = pdf_path.display();
 
     fs::write(&pdf_path, pdf_bytes)
@@ -140,7 +140,7 @@ fn trombi_typst_src(items: &[Item], class_name: &str) -> String {
     let table_items = items
         .iter()
         .map(|Item { image, name: Name { given, family } }| {
-            format!("    item([{given}], [{family}], \"{image}\")", image=image.display())
+            format!("    item([{given}], [{family}], \"Portrait/{image}\")", image=image.display())
         })
         .collect::<Vec<_>>()
         .join(",\n");
