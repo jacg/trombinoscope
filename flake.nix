@@ -31,14 +31,25 @@
       (system:
         let
           pkgs = import nixpkgs {
-              inherit system;
-              overlays = [
-                # ===== Specification of the rust toolchain to be used ====================
-                rust-overlay.overlays.default (final: prev:
-                  { rust-tools = final.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml; }
-                )
-              ];
-            };
+            inherit system;
+            overlays = [
+              # ===== Specification of the rust toolchain to be used ====================
+              rust-overlay.overlays.default (final: prev:
+                { rust-tools = final.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml; }
+              )
+            ];
+          };
+
+          show-imagge-support = [
+            pkgs.libGL
+            pkgs.libxkbcommon
+            pkgs.xorg.libX11
+            pkgs.xorg.libXcursor
+            pkgs.xorg.libXi
+            pkgs.xorg.libXrandr
+            pkgs.vulkan-loader
+          ];
+
         in
           {
             devShell = pkgs.mkShell {
@@ -64,6 +75,7 @@
                 '';
               # Requires "rust-src" to be present in components in ./rust-toolchain.toml
               RUST_SRC_PATH = "${pkgs.rust-tools}/lib/rustlib/src/rust/library";
+              LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath show-imagge-support;
             };
           }
       );
