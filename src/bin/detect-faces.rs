@@ -43,30 +43,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .flat_map(|(image, faces)| {
             faces.into_iter()
                 .map(|b| {
-                    Cropped {image, x: b.x() as u32, y: b.y() as u32, width: b.width(), height: b.height() }})
+                    Cropped {image, x: b.x() as u32, y: b.y() as u32, w: b.width(), h: b.height() }})
         })
         .collect::<Vec<_>>();
 
     let window = create_window("image", Default::default())?;
 
     for (n, face) in faces.iter_mut().enumerate() {
-
-        for _ in 0..30 {
-            face.grow_h(10);
-            show_briefly(format!("expand-{n:3}"), &window, face.get(), Duration::from_millis(10))?;
-        }
-        for _ in 0..10 {
-            face.grow_w(10);
-            show_briefly(format!("expand-{n:3}"), &window, face.get(), Duration::from_millis(10))?;
-        }
-        for _ in 0..4 {
-            face.down(10);
-            show_briefly(format!("expand-{n:3}"), &window, face.get(), Duration::from_millis(10))?;
-        }
-
-        // face.grow_h(300);
-        // face.grow_w(300);
-        // face.down  ( 40);
+        face.set_aspect_ratio_5_4();
+        face.zoom_out(10);
+        face.down    (80);
+        window.set_image("label", face.get()).unwrap();
+        crop_interactively(face, &window).unwrap();
 
         let path = format!("cropped/face{n}.jpg");
         match face.get().save(&path) {
@@ -82,45 +70,83 @@ struct Cropped<'i> {
     image: &'i DynamicImage,
     x: u32,
     y: u32,
-    width: u32,
-    height: u32,
+    w: u32,
+    h: u32,
 }
 
 impl Cropped<'_> {
     fn get(&self) -> DynamicImage {
-        self.image.crop_imm(self.x, self.y, self.width, self.height)
+        self.image.crop_imm(self.x, self.y, self.w, self.h)
     }
 
-    fn grow_h(&mut self, n: u32) { self.y -= n; self.height += 2*n; }
-    fn grow_w(&mut self, n: u32) { self.x -= n; self.width  += 2*n; }
-    fn up    (&mut self, n: u32) { self.y += n }
-    fn down  (&mut self, n: u32) { if self.y > n {self.y -= n} }
+    fn set_aspect_ratio_5_4(&mut self) { self.h = 5 * self.w / 4; }
+
+    fn up      (&mut self, n: u32) {                  self.y += n;                 }
+    fn left    (&mut self, n: u32) {                  self.x += n;                 }
+    fn down    (&mut self, n: u32) { if self.y >   n {self.y -= n;               } }
+    fn right   (&mut self, n: u32) { if self.x >   n {self.x -= n;               } }
+    fn shrink_h(&mut self, n: u32) { if self.h > 2*n {self.y += n; self.h -= 2*n;} }
+    fn shrink_w(&mut self, n: u32) { if self.w > 2*n {self.x += n; self.w -= 2*n;} }
+    fn   grow_h(&mut self, n: u32) { if self.y >   n {self.y -= n; self.h += 2*n;} }
+    fn   grow_w(&mut self, n: u32) { if self.x >   n {self.x -= n; self.w += 2*n;} }
+    fn zoom_in (&mut self, n: u32) { if self.h >10*n && self.w > 8*n {self.shrink_h(5*n); self.shrink_w(4*n);} }
+    fn zoom_out(&mut self, n: u32) { if self.y > 5*n && self.x > 4*n {self.  grow_h(5*n); self.  grow_w(4*n);} }
 }
 
-fn show(label: impl Into<String>, window: &show_image::WindowProxy, image: impl Into<Image>) -> Result<(), Box<dyn std::error::Error>> {
-    // let imageview = ImageView::new(ImageInfo::rgb8(image.width(), image.height()), image.as_bytes());
-    // Create a window with default options and display the image.
-    //let window = create_window("image", Default::default())?;
-    window.set_image(label, image)?;
-    wait_until_escape(window)?;
+fn crop_interactively(face: &mut Cropped<'_>, window: &show_image::WindowProxy) -> Result<(), Box<dyn std::error::Error>> {
+    for event in window.event_channel()? {
+        println!("{:#?}", event);
+        if let event::WindowEvent::KeyboardInput(event) = event {
+            use event::VirtualKeyCode::*;
+            use show_image::event::KeyboardInput as KI;
+            use show_image::event::ModifiersState as MS;
+            let KI { scan_code, key_code, state, modifiers  } = event.input;
+            let step_size = if modifiers.contains(MS::SHIFT) { 10 } else { 1 };
+            // match event.input {
+            //     KI { key_code: Some(Escape), modifiers: MS::SHIFT.. } => {  },
+            //     _ => {},
+            // }
+            macro_rules! xxx {
+                ($method:ident, $ctrl_method:ident) => {
+                    if modifiers.contains(MS::CTRL) { face.$ctrl_method(step_size); }
+                    else   {                          face.     $method(step_size); }
+                    window.set_image("label", face.get()).unwrap();
+                };
+            }
+            if let Some(code) = event.input.key_code {
+                match code {
+                    Escape => if event.input.state.is_pressed() { break },
+                    Up    => { xxx!(up     , up      ); },
+                    Down  => { xxx!(down   , down    ); },
+                    Left  => { xxx!(left   , left    ); },
+                    Right => { xxx!(right  , right   ); },
+                    Z     => { xxx!(zoom_in, zoom_out); },
+                    Back => {},
+                    Return => {},
+                    Space => {},
+                    _ => {},
+                }
+            }
+        }
+    }
     Ok(())
 }
 
 fn show_briefly(label: impl Into<String>, window: &show_image::WindowProxy, image: impl Into<Image>, duration: Duration) -> Result<(), Box<dyn std::error::Error>> {
-    // let imageview = ImageView::new(ImageInfo::rgb8(image.width(), image.height()), image.as_bytes());
-    // Create a window with default options and display the image.
-    //let window = create_window("image", Default::default())?;
     window.set_image(label, image)?;
     std::thread::sleep(duration);
     Ok(())
 }
 
+fn show_until_escape(label: impl Into<String>, window: &show_image::WindowProxy, image: impl Into<Image>) -> Result<(), Box<dyn std::error::Error>> {
+    window.set_image(label, image)?;
+    wait_until_escape(window)?;
+    Ok(())
+}
+
 fn wait_until_escape(window: &show_image::WindowProxy) -> Result<(), Box<dyn std::error::Error>> {
-    // Print keyboard events until Escape is pressed, then exit.
-    // If the user closes the window, the channel is closed and the loop also exits.
     for event in window.event_channel()? {
         if let event::WindowEvent::KeyboardInput(event) = event {
-            //println!("{:#?}", event);
             if event.input.key_code == Some(event::VirtualKeyCode::Escape) && event.input.state.is_pressed() {
                 break;
             }
