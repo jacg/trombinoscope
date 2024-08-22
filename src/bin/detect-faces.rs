@@ -30,7 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     detector.set_slide_window_step(4, 4);
 
     let full_images = std::fs::read_dir(options.image_path())?
-        .take(100)
+        .take(1)
         .filter_map(|x| x.ok())
         .map(|p| p.path())
         .inspect(|p| {dbg!(p);})
@@ -101,26 +101,28 @@ fn crop_interactively(face: &mut Cropped<'_>, window: &show_image::WindowProxy) 
             use show_image::event::KeyboardInput as KI;
             use show_image::event::ModifiersState as MS;
             let KI { scan_code, key_code, state, modifiers  } = event.input;
-            let step_size = if modifiers.contains(MS::SHIFT) { 10 } else { 1 };
+            let mut step_size = 1;
+            if modifiers.contains(MS::SHIFT) { step_size *= 3; }
+            if modifiers.contains(MS::CTRL ) { step_size *= 5; }
             // match event.input {
             //     KI { key_code: Some(Escape), modifiers: MS::SHIFT.. } => {  },
             //     _ => {},
             // }
             macro_rules! xxx {
-                ($method:ident, $ctrl_method:ident) => {
-                    if modifiers.contains(MS::CTRL) { face.$ctrl_method(step_size); }
-                    else   {                          face.     $method(step_size); }
+                ($method:ident) => {
+                    face.$method(step_size);
                     window.set_image("label", face.get()).unwrap();
                 };
             }
             if let Some(code) = event.input.key_code {
                 match code {
                     Escape => if event.input.state.is_pressed() { break },
-                    Up    => { xxx!(up     , up      ); },
-                    Down  => { xxx!(down   , down    ); },
-                    Left  => { xxx!(left   , left    ); },
-                    Right => { xxx!(right  , right   ); },
-                    Z     => { xxx!(zoom_in, zoom_out); },
+                    Up    => { xxx!(up      ); },
+                    Down  => { xxx!(down    ); },
+                    Left  => { xxx!(left    ); },
+                    Right => { xxx!(right   ); },
+                    G     => { xxx!(zoom_out); },
+                    P     => { xxx!(zoom_in ); },
                     Back => {},
                     Return => {},
                     Space => {},
