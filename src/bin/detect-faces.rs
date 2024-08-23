@@ -2,8 +2,7 @@ use std::env::Args;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use image::{DynamicImage, GenericImageView, GrayImage};
-use rustface::{Detector, FaceInfo, ImageData};
+use image::{DynamicImage, GenericImageView};
 use show_image::{Image, create_window, event};
 
 
@@ -17,36 +16,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let mut detector = match rustface::create_detector(options.model_path()) {
-        Ok(detector) => detector,
-        Err(error) => {
-            println!("Failed to create detector: {}", error);
-            std::process::exit(1)
-        }
-    };
-
-    detector.set_min_face_size(20);
-    detector.set_score_thresh(2.0);
-    detector.set_pyramid_scale_factor(0.8);
-    detector.set_slide_window_step(4, 4);
-
-    // let mut faces = full_images.iter()
-    //     .map(|i| (i, detect_faces(&mut *detector, &i.to_luma8()).into_iter().map(|f| *f.bbox())))
-    //     .flat_map(|(image, faces)| {
-    //         faces.into_iter()
-    //             .map(|b| {
-    //                 Cropped {image, x: b.x() as u32, y: b.y() as u32, w: b.width(), h: b.height() }})
-    //             .map(|mut face| {
-    //                 face.set_aspect_ratio(3, 2);
-    //                 face.zoom_out(10);
-    //                 face.down    (80);
-    //                 face
-    //             })
-    //     })
-    //     .collect::<Vec<_>>();
-
     let mut faces = std::fs::read_dir(options.image_path())?
-        .take(3)
+        .take(100)
         .filter_map(|x| x.ok())
         .map(|p| p.path())
         .filter_map(|p| Cropped::load(p))
@@ -192,49 +163,25 @@ fn _wait_until_escape(window: &show_image::WindowProxy) -> Result<(), Box<dyn st
     Ok(())
 }
 
-fn _detect_faces(detector: &mut dyn Detector, gray: &GrayImage) -> Vec<FaceInfo> {
-    let (width, height) = gray.dimensions();
-    let image = ImageData::new(gray, width, height);
-    let now = Instant::now();
-    let faces = detector.detect(&image);
-    println!(
-        "Found {} faces in {} ms",
-        faces.len(),
-        _get_millis(now.elapsed())
-    );
-    faces
-}
-
-fn _get_millis(duration: Duration) -> u64 {
-    duration.as_secs() * 1000u64 + u64::from(duration.subsec_millis())
-}
-
 struct Options {
     image_path: String,
-    model_path: String,
 }
 
 impl Options {
     fn parse(args: Args) -> Result<Self, String> {
         let args: Vec<String> = args.into_iter().collect();
-        if args.len() != 3 {
+        if args.len() != 2 {
             return Err(format!("Usage: {} <model-path> <image-path>", args[0]));
         }
 
-        let model_path = args[1].clone();
-        let image_path = args[2].clone();
+        let image_path = args[1].clone();
 
         Ok(Options {
             image_path,
-            model_path,
         })
     }
 
     fn image_path(&self) -> &str {
         &self.image_path[..]
-    }
-
-    fn model_path(&self) -> &str {
-        &self.model_path[..]
     }
 }
