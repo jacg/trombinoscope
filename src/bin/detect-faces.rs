@@ -30,7 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     detector.set_slide_window_step(4, 4);
 
     let full_images = std::fs::read_dir(options.image_path())?
-        .take(1)
+        .take(100)
         .filter_map(|x| x.ok())
         .map(|p| p.path())
         .inspect(|p| {dbg!(p);})
@@ -38,24 +38,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|i| i.rotate270())
         .collect::<Vec<_>>();
 
+    // let mut faces = full_images.iter()
+    //     .map(|i| (i, detect_faces(&mut *detector, &i.to_luma8()).into_iter().map(|f| *f.bbox())))
+    //     .flat_map(|(image, faces)| {
+    //         faces.into_iter()
+    //             .map(|b| {
+    //                 Cropped {image, x: b.x() as u32, y: b.y() as u32, w: b.width(), h: b.height() }})
+    //             .map(|mut face| {
+    //                 face.set_aspect_ratio(3, 2);
+    //                 face.zoom_out(10);
+    //                 face.down    (80);
+    //                 face
+    //             })
+    //     })
+    //     .collect::<Vec<_>>();
+
     let mut faces = full_images.iter()
-        .map(|i| (i, detect_faces(&mut *detector, &i.to_luma8()).into_iter().map(|f| *f.bbox())))
-        .flat_map(|(image, faces)| {
-            faces.into_iter()
-                .map(|b| {
-                    Cropped {image, x: b.x() as u32, y: b.y() as u32, w: b.width(), h: b.height() }})
-        })
+        .map(Cropped::from_dynamic_image)
         .collect::<Vec<_>>();
 
     let window = create_window("image", Default::default())?;
+    crop_interactively(&mut faces, &window).unwrap();
 
     for (n, face) in faces.iter_mut().enumerate() {
-        face.set_aspect_ratio_5_4();
-        face.zoom_out(10);
-        face.down    (80);
-        window.set_image("label", face.get()).unwrap();
-        crop_interactively(face, &window).unwrap();
-
         let path = format!("cropped/face{n}.jpg");
         match face.get().save(&path) {
             Ok(_) => { println!("Saved result to {}", path)},
@@ -68,48 +73,70 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 struct Cropped<'i> {
     image: &'i DynamicImage,
-    x: u32,
-    y: u32,
-    w: u32,
-    h: u32,
+    x: i32,
+    y: i32,
+    w: i32,
+    /// height to width aspect ratio
+    r: (i32, i32),
 }
 
-impl Cropped<'_> {
-    fn get(&self) -> DynamicImage {
-        self.image.crop_imm(self.x, self.y, self.w, self.h)
+impl<'i> Cropped<'i> {
+    fn from_dynamic_image(image: &'i DynamicImage) -> Cropped<'i> {
+        let (w, h) = image.dimensions();
+        Self { image, x: w as i32 / 2, y: h as i32 /5, w: w as i32 /5, r: (3,2) }
     }
 
-    fn set_aspect_ratio_5_4(&mut self) { self.h = 5 * self.w / 4; }
+    fn get(&self) -> DynamicImage {
+        let &Self { x, y, w, .. } = self;
+        let h = self.h();
+        self.image.crop_imm((x-w/2) as u32, (y-h/2) as u32, w as u32, h as u32)
+    }
 
-    fn up      (&mut self, n: u32) {                  self.y += n;                 }
-    fn left    (&mut self, n: u32) {                  self.x += n;                 }
-    fn down    (&mut self, n: u32) { if self.y >   n {self.y -= n;               } }
-    fn right   (&mut self, n: u32) { if self.x >   n {self.x -= n;               } }
-    fn shrink_h(&mut self, n: u32) { if self.h > 2*n {self.y += n; self.h -= 2*n;} }
-    fn shrink_w(&mut self, n: u32) { if self.w > 2*n {self.x += n; self.w -= 2*n;} }
-    fn   grow_h(&mut self, n: u32) { if self.y >   n {self.y -= n; self.h += 2*n;} }
-    fn   grow_w(&mut self, n: u32) { if self.x >   n {self.x -= n; self.w += 2*n;} }
-    fn zoom_in (&mut self, n: u32) { if self.h >10*n && self.w > 8*n {self.shrink_h(5*n); self.shrink_w(4*n);} }
-    fn zoom_out(&mut self, n: u32) { if self.y > 5*n && self.x > 4*n {self.  grow_h(5*n); self.  grow_w(4*n);} }
+    fn h(&self) -> i32 { let (hh, ww) = self.r; self.w * hh / ww }
+    fn within_simits(&self, x: i32, y: i32, w: i32) -> bool {
+        let h = self.h();
+        x - w / 2 >= 0              &&
+        y - h / 2 >= 0              &&
+        x + w / 2 <  self.max_w()   &&
+        y + h / 2 <  self.max_h()   &&
+        w > 0
+    }
+    fn xxx(&mut self, x: i32, y: i32, w: i32) { if self.within_simits(x, y, w) { self.x = x; self.y = y; self.w = w } }
+
+    fn up      (&mut self, n: i32) { let &mut Self {x, y, w, ..} = self; self.xxx(x  , y+n, w  ) }
+    fn down    (&mut self, n: i32) { let &mut Self {x, y, w, ..} = self; self.xxx(x  , y-n, w  ) }
+    fn left    (&mut self, n: i32) { let &mut Self {x, y, w, ..} = self; self.xxx(x+n, y  , w  ) }
+    fn right   (&mut self, n: i32) { let &mut Self {x, y, w, ..} = self; self.xxx(x-n, y  , w  ) }
+    fn zoom_in (&mut self, n: i32) { let &mut Self {x, y, w, ..} = self; self.xxx(x  , y  , w-n) }
+    fn zoom_out(&mut self, n: i32) { let &mut Self {x, y, w, ..} = self; self.xxx(x  , y  , w+n) }
+    fn max_h(&self) -> i32 { self.image.height() as i32 }
+    fn max_w(&self) -> i32 { self.image.width () as i32 }
 }
 
-fn crop_interactively(face: &mut Cropped<'_>, window: &show_image::WindowProxy) -> Result<(), Box<dyn std::error::Error>> {
+fn crop_interactively(faces: &mut [Cropped<'_>], window: &show_image::WindowProxy) -> Result<(), Box<dyn std::error::Error>> {
+    let mut face_n = 0;
+    macro_rules! show { () => { window.set_image("label", faces[face_n].get()).unwrap(); }; }
+    show!();
     for event in window.event_channel()? {
         println!("{:#?}", event);
         if let event::WindowEvent::KeyboardInput(event) = event {
             use event::VirtualKeyCode::*;
             use show_image::event::KeyboardInput as KI;
             use show_image::event::ModifiersState as MS;
-            let KI { scan_code, key_code, state, modifiers  } = event.input;
+            use show_image::event::ElementState as ES;
+            let KI { scan_code: _, key_code: _, state, modifiers  } = event.input;
+            if state != ES::Pressed { continue; }
             let mut step_size = 1;
             if modifiers.contains(MS::SHIFT) { step_size *= 3; }
             if modifiers.contains(MS::CTRL ) { step_size *= 5; }
+            if modifiers.contains(MS::ALT  ) { step_size *= 7; }
             // match event.input {
             //     KI { key_code: Some(Escape), modifiers: MS::SHIFT.. } => {  },
             //     _ => {},
             // }
             macro_rules! xxx {
                 ($method:ident) => {
+                    let face = &mut faces[face_n];
                     face.$method(step_size);
                     window.set_image("label", face.get()).unwrap();
                 };
@@ -117,15 +144,15 @@ fn crop_interactively(face: &mut Cropped<'_>, window: &show_image::WindowProxy) 
             if let Some(code) = event.input.key_code {
                 match code {
                     Escape => if event.input.state.is_pressed() { break },
-                    Up    => { xxx!(up      ); },
-                    Down  => { xxx!(down    ); },
-                    Left  => { xxx!(left    ); },
-                    Right => { xxx!(right   ); },
-                    G     => { xxx!(zoom_out); },
-                    P     => { xxx!(zoom_in ); },
-                    Back => {},
+                    Up    =>  { xxx!(up      ); },
+                    Down  =>  { xxx!(down    ); },
+                    Left  =>  { xxx!(left    ); },
+                    Right =>  { xxx!(right   ); },
+                    P     =>  { xxx!(zoom_out); },
+                    G     =>  { xxx!(zoom_in ); },
+                    Back  => { face_n = face_n.saturating_sub(1);             show!(); },
+                    Space => { face_n = (face_n + 1).clamp(0, faces.len()-1); show!(); },
                     Return => {},
-                    Space => {},
                     _ => {},
                 }
             }
