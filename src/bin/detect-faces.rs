@@ -33,8 +33,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .take(100)
         .filter_map(|x| x.ok())
         .map(|p| p.path())
-        .inspect(|p| {dbg!(p);})
-        .filter_map(|p| image::open(p).ok())
+        .filter_map(|p| {
+            let start = Instant::now();
+            let i = image::open(&p).ok();
+            let elapsed = start.elapsed();
+            println!("Loaded {p:?} in {elapsed:.0?}");
+            i
+        })
         .map(|i| i.rotate270())
         .collect::<Vec<_>>();
 
