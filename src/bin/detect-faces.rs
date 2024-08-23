@@ -1,4 +1,5 @@
 use std::env::Args;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use image::{DynamicImage, GenericImageView, GrayImage};
@@ -29,20 +30,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     detector.set_pyramid_scale_factor(0.8);
     detector.set_slide_window_step(4, 4);
 
-    let full_images = std::fs::read_dir(options.image_path())?
-        .take(100)
-        .filter_map(|x| x.ok())
-        .map(|p| p.path())
-        .filter_map(|p| {
-            let start = Instant::now();
-            let i = image::open(&p).ok();
-            let elapsed = start.elapsed();
-            println!("Loaded {p:?} in {elapsed:.0?}");
-            i
-        })
-        .map(|i| i.rotate270())
-        .collect::<Vec<_>>();
-
     // let mut faces = full_images.iter()
     //     .map(|i| (i, detect_faces(&mut *detector, &i.to_luma8()).into_iter().map(|f| *f.bbox())))
     //     .flat_map(|(image, faces)| {
@@ -58,8 +45,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     })
     //     .collect::<Vec<_>>();
 
-    let mut faces = full_images.iter()
-        .map(Cropped::from_dynamic_image)
+    let mut faces = std::fs::read_dir(options.image_path())?
+        .take(3)
+        .filter_map(|x| x.ok())
+        .map(|p| p.path())
+        .filter_map(|p| Cropped::load(p))
         .collect::<Vec<_>>();
 
     let window = create_window("image", Default::default())?;
@@ -76,8 +66,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-struct Cropped<'i> {
-    image: &'i DynamicImage,
+struct Cropped {
+    path: PathBuf,
+    image: DynamicImage,
     x: i32,
     y: i32,
     w: i32,
@@ -85,10 +76,22 @@ struct Cropped<'i> {
     r: (i32, i32),
 }
 
-impl<'i> Cropped<'i> {
-    fn from_dynamic_image(image: &'i DynamicImage) -> Cropped<'i> {
+impl Cropped {
+    fn load(path: impl AsRef<Path>) -> Option<Cropped> {
+        let start = Instant::now();
+        let image = image::open(&path).ok()?;
+        let elapsed = start.elapsed();
+        let image = image.rotate270();
+        println!("Loaded {path} in {elapsed:.0?}", path = path.as_ref().display());
         let (w, h) = image.dimensions();
-        Self { image, x: w as i32 / 2, y: h as i32 /5, w: w as i32 /5, r: (3,2) }
+        Some(Self {
+            path: path.as_ref().to_owned(),
+            image,
+            x: w as i32 / 2,
+            y: h as i32 / 5,
+            w: w as i32 / 5,
+            r: (3,2)
+        })
     }
 
     fn get(&self) -> DynamicImage {
@@ -118,7 +121,7 @@ impl<'i> Cropped<'i> {
     fn max_w(&self) -> i32 { self.image.width () as i32 }
 }
 
-fn crop_interactively(faces: &mut [Cropped<'_>], window: &show_image::WindowProxy) -> Result<(), Box<dyn std::error::Error>> {
+fn crop_interactively(faces: &mut [Cropped], window: &show_image::WindowProxy) -> Result<(), Box<dyn std::error::Error>> {
     let mut face_n = 0;
     macro_rules! show { () => { window.set_image("label", faces[face_n].get()).unwrap(); }; }
     show!();
@@ -166,19 +169,19 @@ fn crop_interactively(faces: &mut [Cropped<'_>], window: &show_image::WindowProx
     Ok(())
 }
 
-fn show_briefly(label: impl Into<String>, window: &show_image::WindowProxy, image: impl Into<Image>, duration: Duration) -> Result<(), Box<dyn std::error::Error>> {
+fn _show_briefly(label: impl Into<String>, window: &show_image::WindowProxy, image: impl Into<Image>, duration: Duration) -> Result<(), Box<dyn std::error::Error>> {
     window.set_image(label, image)?;
     std::thread::sleep(duration);
     Ok(())
 }
 
-fn show_until_escape(label: impl Into<String>, window: &show_image::WindowProxy, image: impl Into<Image>) -> Result<(), Box<dyn std::error::Error>> {
+fn _show_until_escape(label: impl Into<String>, window: &show_image::WindowProxy, image: impl Into<Image>) -> Result<(), Box<dyn std::error::Error>> {
     window.set_image(label, image)?;
-    wait_until_escape(window)?;
+    _wait_until_escape(window)?;
     Ok(())
 }
 
-fn wait_until_escape(window: &show_image::WindowProxy) -> Result<(), Box<dyn std::error::Error>> {
+fn _wait_until_escape(window: &show_image::WindowProxy) -> Result<(), Box<dyn std::error::Error>> {
     for event in window.event_channel()? {
         if let event::WindowEvent::KeyboardInput(event) = event {
             if event.input.key_code == Some(event::VirtualKeyCode::Escape) && event.input.state.is_pressed() {
@@ -189,7 +192,7 @@ fn wait_until_escape(window: &show_image::WindowProxy) -> Result<(), Box<dyn std
     Ok(())
 }
 
-fn detect_faces(detector: &mut dyn Detector, gray: &GrayImage) -> Vec<FaceInfo> {
+fn _detect_faces(detector: &mut dyn Detector, gray: &GrayImage) -> Vec<FaceInfo> {
     let (width, height) = gray.dimensions();
     let image = ImageData::new(gray, width, height);
     let now = Instant::now();
@@ -197,12 +200,12 @@ fn detect_faces(detector: &mut dyn Detector, gray: &GrayImage) -> Vec<FaceInfo> 
     println!(
         "Found {} faces in {} ms",
         faces.len(),
-        get_millis(now.elapsed())
+        _get_millis(now.elapsed())
     );
     faces
 }
 
-fn get_millis(duration: Duration) -> u64 {
+fn _get_millis(duration: Duration) -> u64 {
     duration.as_secs() * 1000u64 + u64::from(duration.subsec_millis())
 }
 
