@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use image::{DynamicImage, GenericImageView};
 use img_parts::jpeg::{self, JpegSegment, Jpeg};
 use show_image::{Image, create_window, event};
-
+use bitcode::{self, Encode, Decode};
 
 #[show_image::main]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let mut faces = std::fs::read_dir(options.image_path())?
-        .take(50)
+        .take(3)
         .filter_map(|x| x.ok())
         .map(|p| p.path())
         .filter_map(Cropped::load)
@@ -40,9 +40,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-struct Cropped {
-    path: PathBuf,
-    image: DynamicImage,
+#[derive(Encode, Decode, PartialEq, Debug)]
+struct Metadata {
+    given: String,
+    family: String,
     x: i32,
     y: i32,
     w: i32,
@@ -50,18 +51,17 @@ struct Cropped {
     r: (i32, i32),
 }
 
-fn report_segments(jpeg: &jpeg::Jpeg, our_marker: u8, msg: &str) {
-    println!("---------- {msg} ----------");
-    for (n, segment) in jpeg.segments().iter().enumerate() {
-        let marker = segment.marker();
-        println!("Marker {n:2} in input: {marker}");
-    }
-    println!("---- Contents of our segments ----");
-    for segment in jpeg.segments_by_marker(our_marker) {
-        let contents = std::str::from_utf8(segment.contents()).unwrap();
-        println!("   {contents}");
-    }
-    println!("---- End of segment report ----");
+#[derive(Debug)]
+struct Cropped {
+    path: PathBuf,
+    image: DynamicImage,
+    given: String,
+    family: String,
+    x: i32,
+    y: i32,
+    w: i32,
+    /// height to width aspect ratio
+    r: (i32, i32),
 }
 
 fn bytes_to_jpeg(bytes: &[u8]) -> Jpeg { Jpeg::from_bytes(bytes.to_owned().into()).unwrap() }
@@ -89,33 +89,30 @@ impl Cropped {
         let jpeg = read_jpeg(&path);
 
         // TODO, use OUR_LABEL to avoid collisions with other apps using OUR_MARKER
-        let (x,y,w) = jpeg.segment_by_marker(OUR_MARKER)
+        let it = if let Some(Metadata { given, family, x, y, w, r }) =
+            jpeg
+            .segment_by_marker(OUR_MARKER)
             .map(|seg| {
                 let c = seg.contents().to_vec();
-                println!("Found metadata in JPEG: {c:?}");
-                (
-                    i32::from_le_bytes(c[0.. 4].try_into().unwrap()),
-                    i32::from_le_bytes(c[4.. 8].try_into().unwrap()),
-                    i32::from_le_bytes(c[8..12].try_into().unwrap()),
-                )
-            })
-            .or_else(|| {
-                println!("No metadata found");
+                bitcode::decode(&c).unwrap()
+            }) {
+                Self { path: path.as_ref().into(), image, family, given, x, y, w, r }
+            } else {
                 let (w, h) = image.dimensions();
-                Some((
-                    w as i32 / 2,
-                    h as i32 / 5,
-                    w as i32 / 5,
-                ))
-            })
-            .unwrap();
 
-        Some(Self {
-            path: path.as_ref().to_owned(),
-            image,
-            x, y, w,
-            r: (3,2)
-        })
+                Self {
+                    image,
+                    path: path.as_ref().into(),
+                    given: "Prénom".into(),
+                    family: "Nom".into(),
+                    x: w as i32 / 2,
+                    y: h as i32 / 5,
+                    w: w as i32 / 5,
+                    r: (3, 2),
+                }
+            };
+
+        Some(it)
     }
 
     fn save_metadata(&self) {
@@ -133,14 +130,16 @@ impl Cropped {
     }
 
     fn make_metadata_segment(&self) -> JpegSegment {
-        let Self { x, y, w, .. } = self;
-        let x = x.to_le_bytes();
-        let y = y.to_le_bytes();
-        let w = w.to_le_bytes();
-
+        let &Self { x, y, w, r, .. } = self;
+        let metadata = Metadata {
+            given : self.given .clone(),
+            family: self.family.clone(),
+            x, y, w, r
+        };
+        let metadata = bitcode::encode(&metadata);
         JpegSegment::new_with_contents(
             OUR_MARKER,
-            img_parts::Bytes::from_iter(x.into_iter().chain(y).chain(w))
+            img_parts::Bytes::copy_from_slice(&metadata)
         )
     }
 
