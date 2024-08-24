@@ -1,20 +1,19 @@
-use std::env::Args;
-
+use std::path::PathBuf;
+use clap::Parser;
 use show_image::create_window;
-
 use trombinoscope::crop::{Cropped, crop_interactively};
+
+#[derive(Parser)]
+struct Cli {
+    /// Directory containing the images to be cropped
+    image_dir: PathBuf,
+}
 
 #[show_image::main]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let options = match Options::parse(std::env::args()) {
-        Ok(options) => options,
-        Err(message) => {
-            println!("Failed to parse program arguments: {}", message);
-            std::process::exit(1)
-        }
-    };
+    let cli = Cli::parse();
 
-    let mut faces = std::fs::read_dir(options.image_path())?
+    let mut faces = std::fs::read_dir(cli.image_dir)?
         .take(3)
         .filter_map(|x| x.ok())
         .map(|p| p.path())
@@ -25,27 +24,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     crop_interactively(&mut faces, &window).unwrap();
 
     Ok(())
-}
-
-struct Options {
-    image_path: String,
-}
-
-impl Options {
-    fn parse(args: Args) -> Result<Self, String> {
-        let args: Vec<String> = args.into_iter().collect();
-        if args.len() != 2 {
-            return Err(format!("Usage: {} <model-path> <image-path>", args[0]));
-        }
-
-        let image_path = args[1].clone();
-
-        Ok(Options {
-            image_path,
-        })
-    }
-
-    fn image_path(&self) -> &str {
-        &self.image_path[..]
-    }
 }
