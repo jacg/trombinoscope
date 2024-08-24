@@ -1,3 +1,4 @@
+use clap::Parser;
 use std::cmp::Ordering;
 use std::ffi::OsStr;
 use std::fs;
@@ -13,6 +14,15 @@ use trombinoscope::typst::TypstWrapperWorld;
 #[derive(Debug, Clone)      ] struct Name { given: String, family: String }
 #[derive(Debug, Clone)      ] struct Item { image: PathBuf, name: Name }
 #[derive(Debug, Clone, Copy)] enum FileType { Trombi, Labels }
+
+#[derive(Parser)]
+struct Cli {
+    /// Directory containing the class assets
+    class__dir: PathBuf,
+
+    /// Subdirectory of `class_dir` containing the photos to be used
+    subdir: Option<PathBuf>,
+}
 
 fn main() {
 
