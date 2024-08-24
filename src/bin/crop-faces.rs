@@ -1,8 +1,11 @@
 use std::env::Args;
+use std::fs::File;
 use std::path::{Path, PathBuf};
+use std::io::{Read, Write};
 use std::time::{Duration, Instant};
 
 use image::{DynamicImage, GenericImageView};
+use img_parts::jpeg::{self, JpegSegment, Jpeg};
 use show_image::{Image, create_window, event};
 
 
@@ -17,10 +20,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let mut faces = std::fs::read_dir(options.image_path())?
-        .take(100)
+        .take(50)
         .filter_map(|x| x.ok())
         .map(|p| p.path())
-        .filter_map(|p| Cropped::load(p))
+        .filter_map(Cropped::load)
         .collect::<Vec<_>>();
 
     let window = create_window("image", Default::default())?;
@@ -47,22 +50,98 @@ struct Cropped {
     r: (i32, i32),
 }
 
+fn report_segments(jpeg: &jpeg::Jpeg, our_marker: u8, msg: &str) {
+    println!("---------- {msg} ----------");
+    for (n, segment) in jpeg.segments().iter().enumerate() {
+        let marker = segment.marker();
+        println!("Marker {n:2} in input: {marker}");
+    }
+    println!("---- Contents of our segments ----");
+    for segment in jpeg.segments_by_marker(our_marker) {
+        let contents = std::str::from_utf8(segment.contents()).unwrap();
+        println!("   {contents}");
+    }
+    println!("---- End of segment report ----");
+}
+
+fn bytes_to_jpeg(bytes: &[u8]) -> Jpeg { Jpeg::from_bytes(bytes.to_owned().into()).unwrap() }
+fn write_jpeg(jpeg: Jpeg, sink: &mut impl Write) { jpeg.encoder().write_to(sink).unwrap(); }
+fn read_jpeg(path: impl AsRef<Path>) -> Jpeg { bytes_to_jpeg(&std::fs::read(&path).unwrap()) }
+
+fn jpeg_to_bytes(jpeg: Jpeg) -> Vec<u8> {
+    let mut bytes = vec![];
+    write_jpeg(jpeg, &mut bytes);
+    bytes
+}
+
+const OUR_MARKER: u8 = jpeg::markers::APP14;
+const OUR_LABEL: &str = "trombinoscope";
+
 impl Cropped {
     fn load(path: impl AsRef<Path>) -> Option<Cropped> {
         let start = Instant::now();
         let image = image::open(&path).ok()?;
         let elapsed = start.elapsed();
         let image = image.rotate270();
+        println!("\n\n");
         println!("Loaded {path} in {elapsed:.0?}", path = path.as_ref().display());
-        let (w, h) = image.dimensions();
+
+        let jpeg = read_jpeg(&path);
+
+        // TODO, use OUR_LABEL to avoid collisions with other apps using OUR_MARKER
+        let (x,y,w) = jpeg.segment_by_marker(OUR_MARKER)
+            .map(|seg| {
+                let c = seg.contents().to_vec();
+                println!("Found metadata in JPEG: {c:?}");
+                (
+                    i32::from_le_bytes(c[0.. 4].try_into().unwrap()),
+                    i32::from_le_bytes(c[4.. 8].try_into().unwrap()),
+                    i32::from_le_bytes(c[8..12].try_into().unwrap()),
+                )
+            })
+            .or_else(|| {
+                println!("No metadata found");
+                let (w, h) = image.dimensions();
+                Some((
+                    w as i32 / 2,
+                    h as i32 / 5,
+                    w as i32 / 5,
+                ))
+            })
+            .unwrap();
+
         Some(Self {
             path: path.as_ref().to_owned(),
             image,
-            x: w as i32 / 2,
-            y: h as i32 / 5,
-            w: w as i32 / 5,
+            x, y, w,
             r: (3,2)
         })
+    }
+
+    fn save_metadata(&self) {
+        let mut jpeg = read_jpeg(&self.path);
+        let all_segments = jpeg.segments_mut();
+        let new_segment = self.make_metadata_segment();
+        if let Some(segment) = all_segments.iter_mut().find(|seg| seg.marker() == OUR_MARKER) {
+            *segment = new_segment;
+        } else {
+            let new_pos = all_segments.len() - 1;
+            all_segments.insert(new_pos, new_segment);
+        };
+        let file = &mut File::create(&self.path).unwrap();
+        write_jpeg(jpeg, file);
+    }
+
+    fn make_metadata_segment(&self) -> JpegSegment {
+        let Self { x, y, w, .. } = self;
+        let x = x.to_le_bytes();
+        let y = y.to_le_bytes();
+        let w = w.to_le_bytes();
+
+        JpegSegment::new_with_contents(
+            OUR_MARKER,
+            img_parts::Bytes::from_iter(x.into_iter().chain(y).chain(w))
+        )
     }
 
     fn get(&self) -> DynamicImage {
@@ -97,7 +176,7 @@ fn crop_interactively(faces: &mut [Cropped], window: &show_image::WindowProxy) -
     macro_rules! show { () => { window.set_image("label", faces[face_n].get()).unwrap(); }; }
     show!();
     for event in window.event_channel()? {
-        println!("{:#?}", event);
+        //println!("{:#?}", event);
         if let event::WindowEvent::KeyboardInput(event) = event {
             use event::VirtualKeyCode::*;
             use show_image::event::KeyboardInput as KI;
@@ -136,6 +215,9 @@ fn crop_interactively(faces: &mut [Cropped], window: &show_image::WindowProxy) -
                 }
             }
         }
+    }
+    for face in faces {
+        face.save_metadata();
     }
     Ok(())
 }
