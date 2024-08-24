@@ -29,14 +29,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let window = create_window("image", Default::default())?;
     crop_interactively(&mut faces, &window).unwrap();
 
-    for (n, face) in faces.iter_mut().enumerate() {
-        let path = format!("cropped/face{n}.jpg");
-        match face.get().save(&path) {
-            Ok(_) => { println!("Saved result to {}", path)},
-            Err(message) => println!("Failed to save result to a file. Reason: {}", message),
-        };
-    }
-
     Ok(())
 }
 
