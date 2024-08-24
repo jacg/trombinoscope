@@ -215,13 +215,10 @@ fn trombi_file_for_dir(dir: impl AsRef<Path>, ftype: FileType) -> PathBuf {
 
 fn family_given(l: &Item, r: &Item) -> Ordering {
     use std::cmp::Ordering::*;
-    match (l,r) {
-        (Item { name: l, .. }, Item { name: r, .. }) => {
-            match l.family.to_uppercase().cmp(&r.family.to_uppercase()) {
-                Equal => l.given.to_uppercase().cmp(&r.given.to_uppercase()),
-                different => different,
-            }
-        }
+    let (Item { name: l, .. }, Item { name: r, .. }) = (l,r);
+    match l.family.to_uppercase().cmp(&r.family.to_uppercase()) {
+        Equal => l.given.to_uppercase().cmp(&r.given.to_uppercase()),
+        different => different,
     }
 }
 
