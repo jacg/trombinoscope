@@ -5,9 +5,10 @@ use std::path::{Path, PathBuf};
 
 use clap::Parser;
 
+use trombinoscope::crop::Cropped;
 use typst::foundations::Smart;
 use typst::eval::Tracer;
-
+use tempfile::tempdir;
 use native_dialog::{FileDialog, MessageDialog, MessageType};
 
 use trombinoscope::typst::TypstWrapperWorld;
@@ -53,13 +54,19 @@ fn main() {
             .unwrap()
     };
 
-    let photo_dir = if let Some(subdir) = cli.photo_subdir {
+    let photo_dir = if let Some(ref subdir) = cli.photo_subdir {
         class_dir.join(subdir)
     } else {
         class_dir.clone()
     };
 
-    let items = find_jpgs_in_dir(photo_dir)
+    let render_dir = tempdir().unwrap();
+
+    for file in find_jpgs_in_dir(photo_dir) {
+        write_cropped(file, &render_dir);
+    }
+
+    let items = find_jpgs_in_dir(&render_dir)
         .iter()
         .filter_map(path_to_item)
         .collect::<Vec<_>>();
@@ -67,13 +74,26 @@ fn main() {
     let mut items = items.to_vec();
     items.sort_by(family_given);
 
-    let class_name = class_from_dir(&class_dir);
 
-    render(trombi_typst_src(&items, &class_name) , &class_dir, FileType::Trombi, use_gui);
-    render(labels_typst_src(&items, &class_name) , &class_dir, FileType::Labels, use_gui);
+    let class_name = class_from_dir(&class_dir);
+    render(trombi_typst_src(&items, &class_name) , &render_dir, &class_dir, FileType::Trombi, use_gui);
+    render(labels_typst_src(&items, &class_name) , &render_dir, &class_dir, FileType::Labels, use_gui);
 }
 
-fn render(content: String, render_dir: impl AsRef<Path>, ftype: FileType, use_gui: bool) {
+fn write_cropped(in_file: impl AsRef<Path>, out_dir: impl AsRef<Path>) {
+    let xxx = Cropped::load(in_file).unwrap();
+    let out_file = out_dir.as_ref().join(format!("{} @ {}.jpg", xxx.given, xxx.family));
+    println!("Writing {}", out_file.display());
+    xxx.write(out_file).unwrap();
+}
+
+fn render(
+    content: String,
+    render_dir: impl AsRef<Path>,
+    class_dir: impl AsRef<Path>,
+    ftype: FileType,
+    use_gui: bool,
+) {
     let typst_src = format!("generated-{}.typ", match ftype {
         FileType::Trombi => "tombinoscope",
         FileType::Labels => "étiquettes",
@@ -101,6 +121,11 @@ fn render(content: String, render_dir: impl AsRef<Path>, ftype: FileType, use_gu
 
     fs::write(&pdf_path, pdf_bytes)
         .unwrap_or_else(|err| panic!("Error writing {pdf_path_display}:\n{err:?}"));
+
+    fs::rename(
+        trombi_file_for_dir(&render_dir, ftype),
+        trombi_file_for_dir(& class_dir, ftype),
+    ).unwrap();
 
     let msg = &format!("PDF généré: `{pdf_path_display}`.");
     println!("{msg}");
@@ -158,11 +183,10 @@ fn labels_typst_src(items: &[Item], class_name: &str) -> String {
 }
 
 fn trombi_typst_src(items: &[Item], class_name: &str) -> String {
-
     let table_items = items
         .iter()
         .map(|Item { image, name: Name { given, family } }| {
-            format!("    item([{given}], [{family}], \"Portrait/{image}\")", image=image.display())
+            format!("    item([{given}], [{family}], \"{image}\")", image=image.display())
         })
         .collect::<Vec<_>>()
         .join(",\n");

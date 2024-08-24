@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     let mut faces = std::fs::read_dir(cli.image_dir)?
-        .take(3)
+        .take(100)
         .filter_map(|x| x.ok())
         .map(|p| p.path())
         .filter_map(Cropped::load)

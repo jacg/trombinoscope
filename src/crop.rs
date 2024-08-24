@@ -22,8 +22,8 @@ struct Metadata {
 pub struct Cropped {
     path: PathBuf,
     image: DynamicImage,
-    given: String,
-    family: String,
+    pub given: String,
+    pub family: String,
     x: i32,
     y: i32,
     w: i32,
@@ -41,11 +41,12 @@ const OUR_LABEL: &str = "trombinoscope";
 impl Cropped {
     fn new(path: impl AsRef<Path>, image: DynamicImage) -> Self {
         let (w, h) = image.dimensions();
+        let family = path.as_ref().file_name().unwrap().to_str().unwrap().into();
         Self {
             path: path.as_ref().into(),
             image,
-            given: "Nom".into(),
-            family: "Prénom".into(),
+            given: "Prénom".into(),
+            family,
             x: w as i32 / 2,
             y: h as i32 / 5,
             w: w as i32 / 5,
@@ -119,6 +120,10 @@ impl Cropped {
         self.image.crop_imm((x-w/2) as u32, (y-h/2) as u32, w as u32, h as u32)
     }
 
+    pub fn write(&self, path: impl AsRef<Path>) -> Result<(), image::ImageError> {
+        self.get().save(&path)
+    }
+
     fn h(&self) -> i32 { let (hh, ww) = self.r; self.w * hh / ww }
     fn within_simits(&self, x: i32, y: i32, w: i32) -> bool {
         let h = self.h();
@@ -177,9 +182,8 @@ pub fn crop_interactively(faces: &mut [Cropped], window: &show_image::WindowProx
                     Right =>  { xxx!(right   ); },
                     P     =>  { xxx!(zoom_out); },
                     G     =>  { xxx!(zoom_in ); },
-                    Back  => { face_n = face_n.saturating_sub(1);             show!(); },
-                    Space => { face_n = (face_n + 1).clamp(0, faces.len()-1); show!(); },
-                    Return => {},
+                    Back  =>  { face_n = face_n.saturating_sub(1);             show!(); },
+                    Space =>  { face_n = (face_n + 1).clamp(0, faces.len()-1); show!(); },
                     _ => {},
                 }
             }
