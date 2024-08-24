@@ -190,26 +190,3 @@ pub fn crop_interactively(faces: &mut [Cropped], window: &show_image::WindowProx
     }
     Ok(())
 }
-
-fn _show_briefly(label: impl Into<String>, window: &show_image::WindowProxy, image: impl Into<Image>, duration: Duration) -> Result<(), Box<dyn std::error::Error>> {
-    window.set_image(label, image)?;
-    std::thread::sleep(duration);
-    Ok(())
-}
-
-fn _show_until_escape(label: impl Into<String>, window: &show_image::WindowProxy, image: impl Into<Image>) -> Result<(), Box<dyn std::error::Error>> {
-    window.set_image(label, image)?;
-    _wait_until_escape(window)?;
-    Ok(())
-}
-
-fn _wait_until_escape(window: &show_image::WindowProxy) -> Result<(), Box<dyn std::error::Error>> {
-    for event in window.event_channel()? {
-        if let event::WindowEvent::KeyboardInput(event) = event {
-            if event.input.key_code == Some(event::VirtualKeyCode::Escape) && event.input.state.is_pressed() {
-                break;
-            }
-        }
-    }
-    Ok(())
-}

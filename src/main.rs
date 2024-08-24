@@ -1,8 +1,9 @@
-use clap::Parser;
 use std::cmp::Ordering;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+use clap::Parser;
 
 use typst::foundations::Smart;
 use typst::eval::Tracer;
@@ -18,19 +19,26 @@ use trombinoscope::typst::TypstWrapperWorld;
 #[derive(Parser)]
 struct Cli {
     /// Directory containing the class assets
-    class__dir: PathBuf,
+    class_dir: Option<PathBuf>,
 
-    /// Subdirectory of `class_dir` containing the photos to be used
-    subdir: Option<PathBuf>,
+    /// Use the photos in this subdirectory of `CLASS_DIR`
+    #[arg(long)]
+    photo_subdir: Option<PathBuf>,
+
+    /// Class name, if different from `CLASS_DIR` base name
+    #[arg(long)]
+    class_name: Option<String>,
 }
 
 fn main() {
 
-    let mut args = std::env::args();
-    let _executable = args.next();
+    let cli = Cli::parse();
 
-    let (class_dir, use_gui): (PathBuf, bool) = if let Some(dir) = args.next() { (dir.into(), false) }
-    else {
+    let use_gui = cli.class_dir.is_none();
+
+    let class_dir = if let Some(class_dir) = cli.class_dir {
+        class_dir
+    } else {
         MessageDialog::new()
             .set_type(MessageType::Info)
             .set_title("Choix de dossier")
@@ -38,17 +46,20 @@ fn main() {
             .show_alert()
             .unwrap();
 
-        (FileDialog::new()
+        FileDialog::new()
             .set_location("~/Echanges/CO-Montbrillant/Prof/ZZZ Photos Eleves COMO/")
             .show_open_single_dir()
             .unwrap()
-            .unwrap(),
-        true)
+            .unwrap()
     };
 
-    let portrait_dir = class_dir.join("Portrait");
+    let photo_dir = if let Some(subdir) = cli.photo_subdir {
+        class_dir.join(subdir)
+    } else {
+        class_dir.clone()
+    };
 
-    let items = find_jpgs_in_dir(portrait_dir)
+    let items = find_jpgs_in_dir(photo_dir)
         .iter()
         .filter_map(path_to_item)
         .collect::<Vec<_>>();
@@ -57,6 +68,7 @@ fn main() {
     items.sort_by(family_given);
 
     let class_name = class_from_dir(&class_dir);
+
     render(trombi_typst_src(&items, &class_name) , &class_dir, FileType::Trombi, use_gui);
     render(labels_typst_src(&items, &class_name) , &class_dir, FileType::Labels, use_gui);
 }
