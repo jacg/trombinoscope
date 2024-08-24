@@ -8,7 +8,7 @@ use typst::eval::Tracer;
 
 use native_dialog::{FileDialog, MessageDialog, MessageType};
 
-use trombinoscope::TypstWrapperWorld;
+use trombinoscope::typst::TypstWrapperWorld;
 
 #[derive(Debug, Clone)      ] struct Name { given: String, family: String }
 #[derive(Debug, Clone)      ] struct Item { image: PathBuf, name: Name }
