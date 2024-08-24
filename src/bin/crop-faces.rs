@@ -1,7 +1,7 @@
 use std::env::Args;
 use std::fs::File;
 use std::path::{Path, PathBuf};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::time::{Duration, Instant};
 
 use image::{DynamicImage, GenericImageView};
@@ -39,8 +39,6 @@ struct Metadata {
     x: i32,
     y: i32,
     w: i32,
-    /// height to width aspect ratio
-    r: (i32, i32),
 }
 
 #[derive(Debug)]
@@ -60,51 +58,54 @@ fn bytes_to_jpeg(bytes: &[u8]) -> Jpeg { Jpeg::from_bytes(bytes.to_owned().into(
 fn write_jpeg(jpeg: Jpeg, sink: &mut impl Write) { jpeg.encoder().write_to(sink).unwrap(); }
 fn read_jpeg(path: impl AsRef<Path>) -> Jpeg { bytes_to_jpeg(&std::fs::read(&path).unwrap()) }
 
-fn jpeg_to_bytes(jpeg: Jpeg) -> Vec<u8> {
-    let mut bytes = vec![];
-    write_jpeg(jpeg, &mut bytes);
-    bytes
-}
-
 const OUR_MARKER: u8 = jpeg::markers::APP14;
 const OUR_LABEL: &str = "trombinoscope";
 
 impl Cropped {
+    fn new(path: impl AsRef<Path>, image: DynamicImage) -> Self {
+        let (w, h) = image.dimensions();
+        Self {
+            path: path.as_ref().into(),
+            image,
+            given: "Nom".into(),
+            family: "Prénom".into(),
+            x: w as i32 / 2,
+            y: h as i32 / 5,
+            w: w as i32 / 5,
+            r: (3, 2),
+        }
+    }
+
+    fn set_metadata(&mut self, Metadata { given, family, x, y, w }: Metadata) {
+        self.given  = given;
+        self.family = family;
+        self.x = x;
+        self.y = y;
+        self.w = w;
+    }
+
     fn load(path: impl AsRef<Path>) -> Option<Cropped> {
         let start = Instant::now();
         let image = image::open(&path).ok()?;
         let elapsed = start.elapsed();
         let image = image.rotate270();
-        println!("\n\n");
         println!("Loaded {path} in {elapsed:.0?}", path = path.as_ref().display());
+
+        let mut new = Self::new(&path, image);
 
         let jpeg = read_jpeg(&path);
 
         // TODO, use OUR_LABEL to avoid collisions with other apps using OUR_MARKER
-        let it = if let Some(Metadata { given, family, x, y, w, r }) =
-            jpeg
+        let metadata = jpeg
             .segment_by_marker(OUR_MARKER)
             .map(|seg| {
                 let c = seg.contents().to_vec();
                 bitcode::decode(&c).unwrap()
-            }) {
-                Self { path: path.as_ref().into(), image, family, given, x, y, w, r }
-            } else {
-                let (w, h) = image.dimensions();
-
-                Self {
-                    image,
-                    path: path.as_ref().into(),
-                    given: "Prénom".into(),
-                    family: "Nom".into(),
-                    x: w as i32 / 2,
-                    y: h as i32 / 5,
-                    w: w as i32 / 5,
-                    r: (3, 2),
-                }
-            };
-
-        Some(it)
+            });
+        if let Some(metadata) = metadata {
+            new.set_metadata(metadata);
+        };
+        Some(new)
     }
 
     fn save_metadata(&self) {
@@ -122,11 +123,11 @@ impl Cropped {
     }
 
     fn make_metadata_segment(&self) -> JpegSegment {
-        let &Self { x, y, w, r, .. } = self;
+        let &Self { x, y, w, .. } = self;
         let metadata = Metadata {
             given : self.given .clone(),
             family: self.family.clone(),
-            x, y, w, r
+            x, y, w
         };
         let metadata = bitcode::encode(&metadata);
         JpegSegment::new_with_contents(
