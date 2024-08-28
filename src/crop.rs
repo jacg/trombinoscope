@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::io::Write;
 use std::time::{Duration, Instant};
 
-use image::{DynamicImage, GenericImageView};
+use image::{DynamicImage, GenericImageView, codecs::jpeg::JpegEncoder};
 use img_parts::jpeg::{self, JpegSegment, Jpeg};
 use show_image::{Image, event};
 use bitcode::{self, Encode, Decode};
@@ -192,4 +192,16 @@ pub fn crop_interactively(faces: &mut [Cropped], window: &show_image::WindowProx
         face.save_metadata();
     }
     Ok(())
+}
+
+pub fn write_cropped_images(faces: &[Cropped], dir: impl AsRef<Path>) {
+    std::fs::create_dir_all(&dir).unwrap();
+    for face in faces {
+        let filename = face.path.file_name().unwrap();
+        let path = dir.as_ref().join(filename);
+        let file = &mut File::create(path).unwrap();
+        let mut encoder = JpegEncoder::new(file);
+        let image_bytes = face.get().as_bytes().to_owned();
+        encoder.encode(&image_bytes, face.w as u32, face.h() as u32, image::ExtendedColorType::Rgb8).unwrap();
+    }
 }
