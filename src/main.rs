@@ -350,15 +350,16 @@ impl Cropped {
     }
 
     fn h(&self) -> i32 { let (hh, ww) = self.r; self.w * hh / ww }
-    fn within_simits(&self, x: i32, y: i32, w: i32) -> bool {
+    fn within_limits(&self, x: i32, y: i32, w: i32) -> bool {
+        // TODO sometimes crashes get through these checks
         let h = self.h();
-        x - w / 2 >= 0              &&
-        y - h / 2 >= 0              &&
-        x + w / 2 <  self.max_w()   &&
-        y + h / 2 <  self.max_h()   &&
+        x - w / 2 > 0              &&
+        y - h / 2 > 0              &&
+        x + w / 2 < self.max_w()   &&
+        y + h / 2 < self.max_h()   &&
         w > 0
     }
-    fn xxx(&mut self, x: i32, y: i32, w: i32) { if self.within_simits(x, y, w) { self.x = x; self.y = y; self.w = w } }
+    fn xxx(&mut self, x: i32, y: i32, w: i32) { if self.within_limits(x, y, w) { self.x = x; self.y = y; self.w = w } }
 
     fn up      (&mut self, n: i32) { let &mut Self {x, y, w, ..} = self; self.xxx(x  , y+n, w  ) }
     fn down    (&mut self, n: i32) { let &mut Self {x, y, w, ..} = self; self.xxx(x  , y-n, w  ) }
@@ -394,7 +395,7 @@ fn crop_interactively(
             //     KI { key_code: Some(Escape), modifiers: MS::SHIFT.. } => {  },
             //     _ => {},
             // }
-            macro_rules! xxx {
+            macro_rules! limit {
                 ($method:ident) => {
                     let face = &mut faces[face_n];
                     face.$method(step_size);
@@ -404,12 +405,12 @@ fn crop_interactively(
             if let Some(code) = event.input.key_code {
                 match code {
                     Escape => if event.input.state.is_pressed() { break },
-                    Up    =>  { xxx!(up      ); }
-                    Down  =>  { xxx!(down    ); }
-                    Left  =>  { xxx!(left    ); }
-                    Right =>  { xxx!(right   ); }
-                    P     =>  { xxx!(zoom_out); }
-                    G     =>  { xxx!(zoom_in ); }
+                    Up    =>  { limit!(up      ); }
+                    Down  =>  { limit!(down    ); }
+                    Left  =>  { limit!(left    ); }
+                    Right =>  { limit!(right   ); }
+                    P     =>  { limit!(zoom_out); }
+                    G     =>  { limit!(zoom_in ); }
                     S     =>  { save_and_regenerate(faces, dirs) }
                     Back  =>  { face_n = face_n.saturating_sub(1);             show!(); }
                     Space =>  { face_n = (face_n + 1).clamp(0, faces.len()-1); show!(); }
