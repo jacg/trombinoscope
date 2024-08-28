@@ -199,8 +199,9 @@ pub fn crop_interactively(faces: &mut [Cropped], window: &show_image::WindowProx
 pub fn write_cropped_images(faces: &[Cropped], dir: impl AsRef<Path>) {
     std::fs::create_dir_all(&dir).unwrap();
     for face in faces {
-        let filename = format!("{} @ {}.jpg", dbg!(&face.given), dbg!(&face.family));
-        let path = dir.as_ref().join(filename);
+        //let filename = format!("{} @ {}.jpg", dbg!(&face.given), dbg!(&face.family));
+        let filename = face.path.file_name().unwrap().to_string_lossy();
+        let path = dir.as_ref().join(&*filename);
         let file = &mut File::create(path).unwrap();
         let mut encoder = JpegEncoder::new(file);
         let image_bytes = face.get().as_bytes().to_owned();
