@@ -194,10 +194,12 @@ fn trombi_typst_src(items: &[Item], class_name: &str) -> String {
 ]
 
 #let n_columns = 6
+#let pic_w = 200mm / n_columns
+#let pic_h = pic_w * 3 / 2
 
 #let item(given, family, path) = {{
     set rect(
-        width: 200mm / n_columns,
+        width: pic_w,
         inset: 5pt,
         stroke: 0.5pt + gray,
         height: 10mm,
@@ -208,9 +210,9 @@ fn trombi_typst_src(items: &[Item], class_name: &str) -> String {
 
     stack(
         dir: ttb,
-        rect(pic(path), height: 45mm, stroke: (           bottom: none)),
-        rect(align(bottom, given )  , stroke: (top: none, bottom: none)),
-        rect(align(top   , family)  , stroke: (top: none              )),
+        rect(pic(path), height: pic_h, stroke: (           bottom: none)),
+        rect(align(bottom, given )   , stroke: (top: none, bottom: none)),
+        rect(align(top   , family)   , stroke: (top: none              )),
     )
 }}
 
