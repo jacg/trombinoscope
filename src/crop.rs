@@ -1,11 +1,11 @@
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::io::Write;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use image::{DynamicImage, GenericImageView, codecs::jpeg::JpegEncoder};
 use img_parts::jpeg::{self, JpegSegment, Jpeg};
-use show_image::{Image, event};
+use show_image::event;
 use bitcode::{self, Encode, Decode};
 
 use crate::util::filename_to_given_family;

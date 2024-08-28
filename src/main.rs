@@ -9,8 +9,6 @@ use clap::Parser;
 use trombinoscope::crop::Cropped;
 use typst::foundations::Smart;
 use typst::eval::Tracer;
-use tempfile::tempdir;
-use native_dialog::{FileDialog, MessageDialog, MessageType};
 
 use trombinoscope::typst::TypstWrapperWorld;
 
@@ -21,59 +19,20 @@ use trombinoscope::typst::TypstWrapperWorld;
 #[derive(Parser)]
 struct Cli {
     /// Directory containing the class assets
-    class_dir: Option<PathBuf>,
-
-    /// Use the photos in this subdirectory of `CLASS_DIR`
-    #[arg(long)]
-    photo_subdir: Option<PathBuf>,
-
-    /// Class name, if different from `CLASS_DIR` base name
-    #[arg(long)]
-    class_name: Option<String>,
-
-    /// Write cropped photos and render PDFs in persistent directory
-    #[arg(long)]
-    render_dir: Option<String>,
+    class_dir: PathBuf,
 }
 
 fn main() {
 
     let cli = Cli::parse();
+    let full_photo_dir = cli.class_dir.join("Complet");
+    let render_dir     = cli.class_dir.join("Recadré");
 
-    let use_gui = cli.class_dir.is_none();
+    std::fs::create_dir_all(&render_dir).unwrap();
+    std::fs::remove_dir_all(&render_dir).unwrap();
+    std::fs::create_dir_all(&render_dir).unwrap();
 
-    let class_dir = if let Some(class_dir) = cli.class_dir {
-        class_dir
-    } else {
-        MessageDialog::new()
-            .set_type(MessageType::Info)
-            .set_title("Choix de dossier")
-            .set_text("Chosissez le dossier contenant les photos de la classe dans le dialogue qui suit.")
-            .show_alert()
-            .unwrap();
-
-        FileDialog::new()
-            .set_location("~/Echanges/CO-Montbrillant/Prof/ZZZ Photos Eleves COMO/")
-            .show_open_single_dir()
-            .unwrap()
-            .unwrap()
-    };
-
-    let photo_dir = if let Some(ref subdir) = cli.photo_subdir {
-        class_dir.join(subdir)
-    } else {
-        class_dir.clone()
-    };
-
-    let (render_dir, tmpfile_guard) = if let Some(render_dir) = cli.render_dir {
-        std::fs::create_dir_all(&render_dir).unwrap();
-        (PathBuf::from(render_dir), None)
-    } else {
-        let tmp = tempdir().unwrap();
-        (tmp.path().to_owned(), Some(tmp))
-    };
-
-    for file in find_jpgs_in_dir(photo_dir) {
+    for file in find_jpgs_in_dir(full_photo_dir) {
         write_cropped(file, &render_dir);
     }
 
@@ -86,9 +45,10 @@ fn main() {
     items.sort_by(family_given);
 
 
+    let class_dir = cli.class_dir;
     let class_name = class_from_dir(&class_dir);
-    render(trombi_typst_src(&items, &class_name) , &render_dir, &class_dir, FileType::Trombi, use_gui);
-    render(labels_typst_src(&items, &class_name) , &render_dir, &class_dir, FileType::Labels, use_gui);
+    render(trombi_typst_src(&items, &class_name) , &render_dir, &class_dir, FileType::Trombi);
+    render(labels_typst_src(&items, &class_name) , &render_dir, &class_dir, FileType::Labels);
 }
 
 fn write_cropped(in_file: impl AsRef<Path>, out_dir: impl AsRef<Path>) {
@@ -103,7 +63,6 @@ fn render(
     render_dir: impl AsRef<Path>,
     class_dir: impl AsRef<Path>,
     ftype: FileType,
-    use_gui: bool,
 ) {
     let typst_src_filename = format!("generated-{}.typ", match ftype {
         FileType::Trombi => "tombinoscope",
@@ -140,14 +99,6 @@ fn render(
 
     let msg = &format!("PDF généré: `{pdf_path_display}`.");
     println!("{msg}");
-    if use_gui {
-        MessageDialog::new()
-            .set_type(MessageType::Info)
-            .set_title("PDF généré avec succès")
-            .set_text(msg)
-            .show_alert()
-            .unwrap();
-    }
 }
 
 fn labels_typst_src(items: &[Item], class_name: &str) -> String {
