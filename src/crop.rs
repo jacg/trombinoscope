@@ -8,6 +8,8 @@ use img_parts::jpeg::{self, JpegSegment, Jpeg};
 use show_image::{Image, event};
 use bitcode::{self, Encode, Decode};
 
+use crate::util::filename_to_given_family;
+
 
 #[derive(Encode, Decode, PartialEq, Debug)]
 struct Metadata {
@@ -20,7 +22,7 @@ struct Metadata {
 
 #[derive(Debug)]
 pub struct Cropped {
-    path: PathBuf,
+    pub path: PathBuf,
     image: DynamicImage,
     pub given: String,
     pub family: String,
@@ -41,11 +43,12 @@ const OUR_LABEL: &str = "trombinoscope";
 impl Cropped {
     fn new(path: impl AsRef<Path>, image: DynamicImage) -> Self {
         let (w, h) = image.dimensions();
-        let family = path.as_ref().file_name().unwrap().to_str().unwrap().into();
+        let basename = path.as_ref().file_name().unwrap();
+        let (given, family) = filename_to_given_family(basename).unwrap();
         Self {
             path: path.as_ref().into(),
             image,
-            given: "Prénom".into(),
+            given,
             family,
             x: w as i32 / 2,
             y: h as i32 / 5,
@@ -70,7 +73,6 @@ impl Cropped {
         println!("Loaded {path} in {elapsed:.0?}", path = path.as_ref().display());
 
         let mut new = Self::new(&path, image);
-
         let jpeg = read_jpeg(&path);
 
         // TODO, use OUR_LABEL to avoid collisions with other apps using OUR_MARKER
@@ -197,7 +199,7 @@ pub fn crop_interactively(faces: &mut [Cropped], window: &show_image::WindowProx
 pub fn write_cropped_images(faces: &[Cropped], dir: impl AsRef<Path>) {
     std::fs::create_dir_all(&dir).unwrap();
     for face in faces {
-        let filename = face.path.file_name().unwrap();
+        let filename = format!("{} @ {}.jpg", dbg!(&face.given), dbg!(&face.family));
         let path = dir.as_ref().join(filename);
         let file = &mut File::create(path).unwrap();
         let mut encoder = JpegEncoder::new(file);

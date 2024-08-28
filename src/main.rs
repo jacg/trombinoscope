@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::ffi::OsStr;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
@@ -29,6 +30,10 @@ struct Cli {
     /// Class name, if different from `CLASS_DIR` base name
     #[arg(long)]
     class_name: Option<String>,
+
+    /// Write cropped photos and render PDFs in persistent directory
+    #[arg(long)]
+    render_dir: Option<String>,
 }
 
 fn main() {
@@ -60,7 +65,13 @@ fn main() {
         class_dir.clone()
     };
 
-    let render_dir = tempdir().unwrap();
+    let (render_dir, tmpfile_guard) = if let Some(render_dir) = cli.render_dir {
+        std::fs::create_dir_all(&render_dir).unwrap();
+        (PathBuf::from(render_dir), None)
+    } else {
+        let tmp = tempdir().unwrap();
+        (tmp.path().to_owned(), Some(tmp))
+    };
 
     for file in find_jpgs_in_dir(photo_dir) {
         write_cropped(file, &render_dir);
@@ -81,10 +92,10 @@ fn main() {
 }
 
 fn write_cropped(in_file: impl AsRef<Path>, out_dir: impl AsRef<Path>) {
-    let xxx = Cropped::load(in_file).unwrap();
-    let out_file = out_dir.as_ref().join(format!("{} @ {}.jpg", xxx.given, xxx.family));
+    let cropped = Cropped::load(in_file).unwrap();
+    let out_file = out_dir.as_ref().join(cropped.path.file_name().unwrap());
     println!("Writing {}", out_file.display());
-    xxx.write(out_file).unwrap();
+    cropped.write(out_file).unwrap();
 }
 
 fn render(
@@ -94,13 +105,13 @@ fn render(
     ftype: FileType,
     use_gui: bool,
 ) {
-    let typst_src = format!("generated-{}.typ", match ftype {
+    let typst_src_filename = format!("generated-{}.typ", match ftype {
         FileType::Trombi => "tombinoscope",
         FileType::Labels => "étiquettes",
     });
 
-    let mut out = fs::File::create(&typst_src).unwrap();
-    use std::io::Write;
+    let typst_src_path = render_dir.as_ref().join(&typst_src_filename);
+    let mut out = fs::File::create(&typst_src_path).unwrap();
     out.write_all(content.as_bytes()).unwrap();
 
     // Create world with content.
@@ -110,7 +121,7 @@ fn render(
     let mut tracer = Tracer::default();
     let document = typst::compile(&world, &mut tracer)
         .unwrap_or_else(|err| {
-            panic!("\nError compiling typst source `{typst_src}`:\n{err:?}\n")
+            panic!("\nError compiling typst source `{typst_src_filename}`:\n{err:?}\n")
         });
 
     // Output to pdf
@@ -290,13 +301,9 @@ fn is_jpg(path: impl AsRef<Path>) -> bool {
 
 fn path_to_item(image_path: impl AsRef<Path>) -> Option<Item> {
     let basename = image_path.as_ref().file_name()?;
-    let stem: String = Path::new(basename).file_stem()?.to_str().map(Into::into)?;
-    let mut split = stem.split('@');
+    let (given, family) = trombinoscope::util::filename_to_given_family(&image_path)?;
     Some( Item {
         image: basename.into(),
-        name: Name {
-            given: split.next()?.trim().into(),
-            family: if let Some(name) = split.next() { name.trim() } else { "Séparer prénom du nom par un `@`" }.into(),
-        }
+        name: Name { given, family }
     })
 }
