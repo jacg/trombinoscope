@@ -191,6 +191,7 @@ pub fn crop_interactively(faces: &mut [Cropped], window: &show_image::WindowProx
         }
     }
     for face in faces {
+        println!("Embedding metadata in {}", face.path.display());
         face.save_metadata();
     }
     Ok(())
