@@ -53,7 +53,7 @@ impl Cropped {
             x: w as i32 / 2,
             y: h as i32 / 5,
             w: w as i32 / 5,
-            r: (3, 2),
+            r: (5, 4),
         }
     }
 

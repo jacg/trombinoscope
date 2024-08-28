@@ -195,7 +195,7 @@ fn trombi_typst_src(items: &[Item], class_name: &str) -> String {
 
 #let n_columns = 6
 #let pic_w = 200mm / n_columns
-#let pic_h = pic_w * 3 / 2
+#let pic_h = pic_w * 5 / 4
 
 #let item(given, family, path) = {{
     set rect(
