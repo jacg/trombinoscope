@@ -162,7 +162,7 @@ pub fn crop_interactively(faces: &mut [Cropped], window: &show_image::WindowProx
             if state != ES::Pressed { continue; }
             let mut step_size = 10;
             if modifiers.contains(MS::CTRL ) { step_size /= 10; }
-            if modifiers.contains(MS::ALT  ) { step_size *=  5; }
+            if modifiers.contains(MS::SHIFT) { step_size *=  5; }
             // match event.input {
             //     KI { key_code: Some(Escape), modifiers: MS::SHIFT.. } => {  },
             //     _ => {},
