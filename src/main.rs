@@ -3,6 +3,7 @@ use std::ffi::OsStr;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use clap::Parser;
 use show_image::create_window;
@@ -30,12 +31,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let full_photo_dir = cli.class_dir.join("Complet");
     let render_dir     = cli.class_dir.join("Recadré");
 
+    let start = Instant::now();
     let mut faces = std::fs::read_dir(full_photo_dir)?
         .take(100)
         .filter_map(|x| x.ok())
         .map(|p| p.path())
         .filter_map(Cropped::load)
         .collect::<Vec<_>>();
+    println!("Loading all images took {:.1?}", start.elapsed());
 
     let window = create_window("image", Default::default())?;
     crop_interactively(&mut faces, &window).unwrap();

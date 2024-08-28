@@ -190,10 +190,18 @@ pub fn crop_interactively(faces: &mut [Cropped], window: &show_image::WindowProx
             }
         }
     }
+
+    let start_all = Instant::now();
     for face in faces {
-        println!("Embedding metadata in {}", face.path.display());
+        let start = Instant::now();
         face.save_metadata();
+        println!("Embedded metadata in {} in {:.0?}",
+                 face.path.display(),
+                 start.elapsed(),
+        );
     }
+    println!("Saving metadata took {:.0?}", start_all.elapsed());
+
     Ok(())
 }
 
