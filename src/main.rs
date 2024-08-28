@@ -5,8 +5,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
+use show_image::create_window;
 
-use trombinoscope::crop::Cropped;
+use trombinoscope::crop::{crop_interactively, write_cropped_images, Cropped};
 use typst::foundations::Smart;
 use typst::eval::Tracer;
 
@@ -22,19 +23,35 @@ struct Cli {
     class_dir: PathBuf,
 }
 
-fn main() {
-
+#[show_image::main]
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
+
     let full_photo_dir = cli.class_dir.join("Complet");
     let render_dir     = cli.class_dir.join("Recadré");
+
+    let mut faces = std::fs::read_dir(full_photo_dir)?
+        .take(100)
+        .filter_map(|x| x.ok())
+        .map(|p| p.path())
+        .filter_map(Cropped::load)
+        .collect::<Vec<_>>();
+
+    let window = create_window("image", Default::default())?;
+    crop_interactively(&mut faces, &window).unwrap();
 
     std::fs::create_dir_all(&render_dir).unwrap(); // Ensure it exists so next line works
     std::fs::remove_dir_all(&render_dir).unwrap(); // Remove it and its contents
     std::fs::create_dir_all(&render_dir).unwrap(); // Ensure it exists
 
-    for file in find_jpgs_in_dir(full_photo_dir) {
-        write_cropped(file, &render_dir);
-    }
+    write_cropped_images(&faces, &render_dir);
+
+    trombinoscope(render_dir, cli.class_dir);
+
+    Ok(())
+}
+
+fn trombinoscope(render_dir: impl AsRef<Path>, class_dir: impl AsRef<Path>) {
 
     let items = find_jpgs_in_dir(&render_dir)
         .iter()
@@ -44,8 +61,6 @@ fn main() {
     let mut items = items.to_vec();
     items.sort_by(family_given);
 
-
-    let class_dir = cli.class_dir;
     let class_name = class_from_dir(&class_dir);
     render(trombi_typst_src(&items, &class_name) , &render_dir, &class_dir, FileType::Trombi);
     render(labels_typst_src(&items, &class_name) , &render_dir, &class_dir, FileType::Labels);
@@ -97,7 +112,9 @@ fn render(
         trombi_file_for_dir(& class_dir, ftype),
     ).unwrap();
 
-    let msg = &format!("PDF généré: `{pdf_path_display}`.");
+    let moved_pdf_path = trombi_file_for_dir(& class_dir, ftype);
+    let moved_pdf_path_display = moved_pdf_path.display();
+    let msg = &format!("PDF généré: `{moved_pdf_path_display}`.");
     println!("{msg}");
 }
 
