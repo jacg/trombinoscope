@@ -5,19 +5,18 @@ use trombinoscope::crop::{crop_interactively, write_cropped_images, Cropped};
 
 #[derive(Parser)]
 struct Cli {
-    /// Directory containing the images to be cropped
-    image_dir: PathBuf,
-
-    /// Generate cropped images and write to this directory
-    #[arg(long)]
-    out_dir: Option<PathBuf>,
+    /// Directory containing the class assets
+    class_dir: PathBuf,
 }
 
 #[show_image::main]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    let mut faces = std::fs::read_dir(cli.image_dir)?
+    let full_photo_dir = cli.class_dir.join("Complet");
+    let render_dir     = cli.class_dir.join("Recadré");
+
+    let mut faces = std::fs::read_dir(full_photo_dir)?
         .take(100)
         .filter_map(|x| x.ok())
         .map(|p| p.path())
@@ -27,9 +26,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let window = create_window("image", Default::default())?;
     crop_interactively(&mut faces, &window).unwrap();
 
-    if let Some(dir) = cli.out_dir {
-        write_cropped_images(&faces, dir);
-    }
+    std::fs::create_dir_all(&render_dir).unwrap(); // Ensure it exists so next line works
+    std::fs::remove_dir_all(&render_dir).unwrap(); // Remove it and its contents
+    std::fs::create_dir_all(&render_dir).unwrap(); // Ensure it exists
+
+    write_cropped_images(&faces, render_dir);
 
     Ok(())
 }

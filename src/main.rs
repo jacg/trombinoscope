@@ -28,9 +28,9 @@ fn main() {
     let full_photo_dir = cli.class_dir.join("Complet");
     let render_dir     = cli.class_dir.join("Recadré");
 
-    std::fs::create_dir_all(&render_dir).unwrap();
-    std::fs::remove_dir_all(&render_dir).unwrap();
-    std::fs::create_dir_all(&render_dir).unwrap();
+    std::fs::create_dir_all(&render_dir).unwrap(); // Ensure it exists so next line works
+    std::fs::remove_dir_all(&render_dir).unwrap(); // Remove it and its contents
+    std::fs::create_dir_all(&render_dir).unwrap(); // Ensure it exists
 
     for file in find_jpgs_in_dir(full_photo_dir) {
         write_cropped(file, &render_dir);
