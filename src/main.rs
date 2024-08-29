@@ -327,6 +327,8 @@ Try stripping out metadata by rerunning trombinoscope with the --strip-metadata 
             });
         if let Some(metadata) = metadata {
             new.set_metadata(metadata);
+        } else {
+            new.set_rotation(3);
         };
         Some(new)
     }
