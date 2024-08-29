@@ -26,7 +26,7 @@ struct Cli {
     class_dir: PathBuf,
 
     #[arg(long)]
-    strip_old_metadata: bool,
+    strip_metadata: bool,
 }
 
 #[derive(Debug)]
@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .take(100)
         .filter_map(|x| x.ok())
         .map(|p| p.path())
-        .filter_map(|path| Cropped::load(path, cli.strip_old_metadata))
+        .filter_map(|path| Cropped::load(path, cli.strip_metadata))
         .collect::<Vec<_>>();
     println!("Loading all images took {:.1?}", start.elapsed());
 
@@ -318,7 +318,12 @@ impl Cropped {
             .segment_by_marker(OUR_MARKER)
             .map(|seg| {
                 let c = seg.contents().to_vec();
-                bitcode::decode(&c).unwrap()
+                bitcode::decode(&c)
+                    .expect("
+Error in reading metadata.
+JPEG file probably contains old metadata version.
+Try stripping out metadata by rerunning trombinoscope with the --strip-metadata option.
+\n")
             });
         if let Some(metadata) = metadata {
             new.set_metadata(metadata);
