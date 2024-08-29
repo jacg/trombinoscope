@@ -47,6 +47,7 @@ impl Dirs {
             class,
         }
     }
+    fn class_name(&self) -> String { class_from_dir(&self.class)  }
 }
 
 #[show_image::main]
@@ -82,9 +83,10 @@ fn render(
     dir: &Dirs,
     ftype: FileType,
 ) {
+    let class_name = dir.class_name();
     let typst_src_filename = format!("generated-{}.typ", match ftype {
-        FileType::Trombi => "tombinoscope",
-        FileType::Labels => "étiquettes",
+        FileType::Trombi => format!("tombinoscope_{class_name}"),
+        FileType::Labels => format!("étiquettes_{class_name}"),
     });
 
     let typst_src_path = dir.render.join(&typst_src_filename);
@@ -104,26 +106,26 @@ fn render(
     // Output to pdf
     let pdf_bytes = typst_pdf::pdf(&document, Smart::Auto, None);
 
-    let pdf_path = trombi_file_for_dir(&dir.render, ftype);
+    let pdf_path = trombi_file_for_dir(&dir.render, &dir.class_name(), ftype);
     let pdf_path_display = pdf_path.display();
 
     fs::write(&pdf_path, pdf_bytes)
         .unwrap_or_else(|err| panic!("Error writing {pdf_path_display}:\n{err:?}"));
 
     fs::rename(
-        trombi_file_for_dir(&dir.render, ftype),
-        trombi_file_for_dir(&dir.class , ftype),
+        trombi_file_for_dir(&dir.render, &dir.class_name(), ftype),
+        trombi_file_for_dir(&dir.class , &dir.class_name(), ftype),
     ).unwrap();
 
-    let moved_pdf_path = trombi_file_for_dir(&dir.class, ftype);
+    let moved_pdf_path = trombi_file_for_dir(&dir.class, &dir.class_name(), ftype);
     let moved_pdf_path_display = moved_pdf_path.display();
     let msg = &format!("PDF généré: `{moved_pdf_path_display}`.");
     println!("{msg}");
 }
 
-fn labels_typst_src(items: &[Item], class_name: &str) -> String {
+fn labels_typst_src(items: &[Item], dir: &Dirs) -> String {
     let institution = "CO Montbrillant";
-
+    let class_name = dir.class_name();
     let label = |given, family| format!("label([{given}], [{family}])");
     let labels = items
         .iter()
@@ -164,7 +166,7 @@ fn labels_typst_src(items: &[Item], class_name: &str) -> String {
 )"#}
 }
 
-fn trombi_typst_src(items: &[Item], class_name: &str) -> String {
+fn trombi_typst_src(items: &[Item], dir: &Dirs) -> String {
     let table_items = items
         .iter()
         .map(|Item { image, name: Name { given, family } }| {
@@ -172,7 +174,7 @@ fn trombi_typst_src(items: &[Item], class_name: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(",\n");
-
+    let class_name = dir.class_name();
 
     format!(r#"#set page(
   paper: "a4",
@@ -351,7 +353,7 @@ impl Cropped {
 
     fn h(&self) -> i32 { let (hh, ww) = self.r; self.w * hh / ww }
     fn within_limits(&self, x: i32, y: i32, w: i32) -> bool {
-        // TODO sometimes crashes get through these checks
+        // TODO sometimes crashes get through these checksi
         let h = self.h();
         x - w / 2 > 0              &&
         y - h / 2 > 0              &&
@@ -444,9 +446,8 @@ fn trombinoscope(dir: &Dirs) {
     let mut items = items.to_vec();
     items.sort_by(family_given);
 
-    let class_name = class_from_dir(&dir.class);
-    render(trombi_typst_src(&items, &class_name) , &dir, FileType::Trombi);
-    render(labels_typst_src(&items, &class_name) , &dir, FileType::Labels);
+    render(trombi_typst_src(&items, dir), &dir, FileType::Trombi);
+    render(labels_typst_src(&items, dir), &dir, FileType::Labels);
 }
 
 fn path_to_item(image_path: impl AsRef<Path>) -> Option<Item> {
@@ -521,10 +522,10 @@ fn class_from_dir(dir: impl AsRef<Path>) -> String {
     class.to_str().unwrap().into()
 }
 
-fn trombi_file_for_dir(dir: impl AsRef<Path>, ftype: FileType) -> PathBuf {
+fn trombi_file_for_dir(dir: impl AsRef<Path>, class_name: &str, ftype: FileType) -> PathBuf {
     use FileType::*;
     dir.as_ref().join(match ftype {
-        Trombi => "trombinoscope.pdf",
-        Labels => "étiquettes.pdf",
+        Trombi => format!("trombinoscope_{class_name}.pdf"),
+        Labels => format!("étiquettes_{class_name}.pdf"),
     })
 }
