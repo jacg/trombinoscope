@@ -43,7 +43,7 @@ impl Dirs {
         let class: PathBuf = class_dir.as_ref().into();
         Self {
             photo: class.join("Complet"),
-            render: class.join("Recadré"),
+            render: "/tmp/trombinoscope-working-dir".into(), //class.join("Recadré"),
             class,
         }
     }
@@ -112,7 +112,7 @@ fn render(
     fs::write(&pdf_path, pdf_bytes)
         .unwrap_or_else(|err| panic!("Error writing {pdf_path_display}:\n{err:?}"));
 
-    fs::rename(
+    fs::copy(
         trombi_file_for_dir(&dir.render, &dir.class_name(), ftype),
         trombi_file_for_dir(&dir.class , &dir.class_name(), ftype),
     ).unwrap();
