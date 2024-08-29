@@ -264,7 +264,10 @@ const OUR_LABEL: &str = "trombinoscope";
 
 impl Cropped {
     fn new(path: impl AsRef<Path>, image: DynamicImage) -> Self {
-        let (w, h) = image.dimensions();
+        let (h, w) = {
+            let (w, h) = image.dimensions();
+            if w < h {(w,h)} else {(h,w)}
+        };
         let basename = path.as_ref().file_name().unwrap();
         let (given, family) = tromb::util::filename_to_given_family(basename).unwrap();
         Self {
@@ -272,9 +275,9 @@ impl Cropped {
             image: image.clone(),
             given,
             family,
-            x: w as i32 / 2,
-            y: h as i32 / 2,
-            w: w as i32 / 5,
+            x: w as i32 / 3,
+            y: h as i32 / 4,
+            w: w as i32 / 8,
             r: (5, 4),
             rotate: 0,
             rotated_cache: image,
@@ -328,7 +331,8 @@ Try stripping out metadata by rerunning trombinoscope with the --strip-metadata 
         if let Some(metadata) = metadata {
             new.set_metadata(metadata);
         } else {
-            new.set_rotation(3);
+            let (w,h) = new.image.dimensions();
+            new.set_rotation( if h > w  {0} else {3});
         };
         Some(new)
     }
@@ -392,8 +396,9 @@ Try stripping out metadata by rerunning trombinoscope with the --strip-metadata 
     fn zoom_out(&mut self, n: i32) { let &mut Self {x, y, w, ..} = self; self.xxx(x  , y  , w+n) }
     fn max_h(&self) -> i32 { self.image.height() as i32 }
     fn max_w(&self) -> i32 { self.image.width () as i32 }
-    fn rot_r(&mut self) { self.set_rotation(dbg!((self.rotate + 1).rem_euclid(4))); }
-    fn rot_l(&mut self) { self.set_rotation(dbg!((self.rotate - 1).rem_euclid(4))); }
+    fn rot_r(&mut self) { self.set_rotation((self.rotate + 1).rem_euclid(4)); }
+    fn rot_l(&mut self) { self.set_rotation((self.rotate - 1).rem_euclid(4)); }
+    fn flip (&mut self) { self.set_rotation((self.rotate + 2).rem_euclid(4)); }
 }
 
 fn crop_interactively(
@@ -440,6 +445,7 @@ fn crop_interactively(
                     S     =>  { save_and_regenerate(faces, dirs) }
                     R     =>  { faces[face_n].rot_r(); window.set_image("label", faces[face_n].get()).unwrap()  }
                     L     =>  { faces[face_n].rot_l(); window.set_image("label", faces[face_n].get()).unwrap()  }
+                    I     =>  { faces[face_n].flip (); window.set_image("label", faces[face_n].get()).unwrap()  }
                     Back  =>  { face_n = face_n.saturating_sub(1);             show!(); }
                     Space =>  { face_n = (face_n + 1).clamp(0, faces.len()-1); show!(); }
                     _ => {}
@@ -475,13 +481,13 @@ fn trombinoscope(dir: &Dirs) {
     unix_mv(&dir.work, &dir.render).unwrap();
 
     fs::copy(
-        dbg!(trombi_file_for_dir(&dir.render, &dir.class_name(), Trombi)),
-        dbg!(trombi_file_for_dir(&dir.class , &dir.class_name(), Trombi)),
+        trombi_file_for_dir(&dir.render, &dir.class_name(), Trombi),
+        trombi_file_for_dir(&dir.class , &dir.class_name(), Trombi),
     ).unwrap();
 
     fs::copy(
-        dbg!(trombi_file_for_dir(&dir.render, &dir.class_name(), Labels)),
-        dbg!(trombi_file_for_dir(&dir.class , &dir.class_name(), Labels)),
+        trombi_file_for_dir(&dir.render, &dir.class_name(), Labels),
+        trombi_file_for_dir(&dir.class , &dir.class_name(), Labels),
     ).unwrap();
 
 }
