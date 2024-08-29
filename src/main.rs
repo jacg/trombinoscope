@@ -246,6 +246,7 @@ pub struct Cropped {
     /// height to width aspect ratio
     r: (i32, i32),
     rotate: i8,
+    rotated_cache: DynamicImage,
 }
 
 #[derive(Debug, Clone)      ] struct Name { given: String, family: String }
@@ -266,7 +267,7 @@ impl Cropped {
         let (given, family) = tromb::util::filename_to_given_family(basename).unwrap();
         Self {
             path: path.as_ref().into(),
-            image,
+            image: image.clone(),
             given,
             family,
             x: w as i32 / 2,
@@ -274,6 +275,7 @@ impl Cropped {
             w: w as i32 / 5,
             r: (5, 4),
             rotate: 0,
+            rotated_cache: image,
         }
     }
 
@@ -283,25 +285,19 @@ impl Cropped {
         self.x = x;
         self.y = y;
         self.w = w;
-        self.rotate = rotate;
+        self.set_rotation(rotate);
     }
 
-    fn rotated(&self) -> DynamicImage {
-        let image = &self.image;
-        macro_rules! time {
-            ($it:expr) => {{
-                let start = Instant::now();
-                let it = $it;
-                println!("took {:.0?}", start.elapsed());
-                it
-            }};
-        }
-        match self.rotate {
-            0 => time!(image.clone()),
-            1 => time!(image.rotate90()),
-            2 => time!(image.rotate180()),
-            3 => time!(image.rotate270()),
+    fn set_rotation(&mut self, rotation: i8) {
+        self.rotate = rotation;
+        let unrotated = &self.image;
+        self.rotated_cache = match rotation {
+            0 => unrotated.clone(),
+            1 => unrotated.rotate90(),
+            2 => unrotated.rotate180(),
+            3 => unrotated.rotate270(),
             _ => unreachable!(),
+
         }
     }
 
@@ -359,7 +355,7 @@ impl Cropped {
     fn get(&self) -> DynamicImage {
         let &Self { x, y, w, .. } = self;
         let h = self.h();
-        self.rotated().crop_imm((x-w/2) as u32, (y-h/2) as u32, w as u32, h as u32)
+        self.rotated_cache.crop_imm((x-w/2) as u32, (y-h/2) as u32, w as u32, h as u32)
     }
 
     pub fn write(&self, path: impl AsRef<Path>) -> Result<(), image::ImageError> {
@@ -386,8 +382,8 @@ impl Cropped {
     fn zoom_out(&mut self, n: i32) { let &mut Self {x, y, w, ..} = self; self.xxx(x  , y  , w+n) }
     fn max_h(&self) -> i32 { self.image.height() as i32 }
     fn max_w(&self) -> i32 { self.image.width () as i32 }
-    fn rot_r(&mut self) { self.rotate = dbg!((self.rotate + 1).rem_euclid(4)); }
-    fn rot_l(&mut self) { self.rotate = dbg!((self.rotate - 1).rem_euclid(4)); }
+    fn rot_r(&mut self) { self.set_rotation(dbg!((self.rotate + 1).rem_euclid(4))); }
+    fn rot_l(&mut self) { self.set_rotation(dbg!((self.rotate - 1).rem_euclid(4))); }
 }
 
 fn crop_interactively(
@@ -447,6 +443,7 @@ fn crop_interactively(
 fn save_and_regenerate(faces: &[Cropped], dirs: &Dirs) {
     save_crop_metadata(faces);
     ensure_empty_dir(&dirs.work).unwrap();
+    ensure_empty_dir(&dirs.render).unwrap();
     write_cropped_images(&faces, &dirs.work);
     trombinoscope(&dirs);
 }
@@ -464,7 +461,8 @@ fn trombinoscope(dir: &Dirs) {
     render(trombi_typst_src(&items, dir), &dir, Trombi);
     render(labels_typst_src(&items, dir), &dir, Labels);
 
-    copy_recursively(&dir.work, &dir.render).unwrap();
+    unix_rm_rf(&dir.render).unwrap();
+    unix_mv(&dir.work, &dir.render).unwrap();
 
     fs::copy(
         dbg!(trombi_file_for_dir(&dir.render, &dir.class_name(), Trombi)),
@@ -558,17 +556,24 @@ fn trombi_file_for_dir(dir: impl AsRef<Path>, class_name: &str, ftype: FileType)
     })
 }
 
-fn copy_recursively(from: impl AsRef<Path>, to: impl AsRef<Path>) -> io::Result<()> {
-    std::process::Command::new("cp")
-        .arg("-r")
+fn unix_mv(from: impl AsRef<Path>, to: impl AsRef<Path>) -> io::Result<()> {
+    std::process::Command::new("mv")
         .arg(from.as_ref().as_os_str())
         .arg(  to.as_ref().as_os_str())
         .output()?;
     Ok(())
 }
 
+fn unix_rm_rf(path: impl AsRef<Path>) -> io::Result<()> {
+    std::process::Command::new("rm")
+        .arg(path.as_ref().as_os_str())
+        .arg("-rf")
+        .output()?;
+    Ok(())
+}
+
 fn ensure_empty_dir(dir: impl AsRef<Path>) -> std::io::Result<()> {
-    let dir = dir.as_ref().as_os_str();
+    let dir = dbg!(dir.as_ref().as_os_str());
     std::process::Command::new("rm")   .arg("-rf").arg(dir).output()?;
     std::process::Command::new("mkdir").arg("-p" ).arg(dir).output()?;
     Ok(())
