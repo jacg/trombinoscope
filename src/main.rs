@@ -24,6 +24,9 @@ use trombinoscope::{
 struct Cli {
     /// Directory containing the class assets
     class_dir: PathBuf,
+
+    #[arg(long)]
+    strip_old_metadata: bool,
 }
 
 #[derive(Debug)]
@@ -50,7 +53,6 @@ impl Dirs {
 #[show_image::main]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-
     let dirs = Dirs::new(cli.class_dir);
 
     let start = Instant::now();
@@ -58,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .take(100)
         .filter_map(|x| x.ok())
         .map(|p| p.path())
-        .filter_map(Cropped::load)
+        .filter_map(|path| Cropped::load(path, cli.strip_old_metadata))
         .collect::<Vec<_>>();
     println!("Loading all images took {:.1?}", start.elapsed());
 
@@ -69,7 +71,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn write_cropped(in_file: impl AsRef<Path>, out_dir: impl AsRef<Path>) {
-    let cropped = Cropped::load(in_file).unwrap();
+    let cropped = Cropped::load(in_file, false).unwrap();
     let out_file = out_dir.as_ref().join(cropped.path.file_name().unwrap());
     println!("Writing {}", out_file.display());
     cropped.write(out_file).unwrap();
@@ -301,14 +303,15 @@ impl Cropped {
         }
     }
 
-    pub fn load(path: impl AsRef<Path>) -> Option<Cropped> {
+    pub fn load(path: impl AsRef<Path>, strip_old_metadata: bool) -> Option<Cropped> {
         let start = Instant::now();
         let image = image::open(&path).ok()?;
         let elapsed = start.elapsed();
         println!("Loaded {path} in {elapsed:.0?}", path = path.as_ref().display());
 
         let mut new = Self::new(&path, image);
-        let jpeg = read_jpeg(&path);
+        let mut jpeg = read_jpeg(&path);
+        if strip_old_metadata { jpeg.remove_segments_by_marker(OUR_MARKER) }
 
         // TODO, use OUR_LABEL to avoid collisions with other apps using OUR_MARKER
         let metadata = jpeg
