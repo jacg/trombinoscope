@@ -231,6 +231,7 @@ struct Metadata {
     x: i32,
     y: i32,
     w: i32,
+    rotate: i8,
 }
 
 #[derive(Debug)]
@@ -244,6 +245,7 @@ pub struct Cropped {
     w: i32,
     /// height to width aspect ratio
     r: (i32, i32),
+    rotate: i8,
 }
 
 #[derive(Debug, Clone)      ] struct Name { given: String, family: String }
@@ -268,25 +270,45 @@ impl Cropped {
             given,
             family,
             x: w as i32 / 2,
-            y: h as i32 / 5,
+            y: h as i32 / 2,
             w: w as i32 / 5,
             r: (5, 4),
+            rotate: 0,
         }
     }
 
-    fn set_metadata(&mut self, Metadata { given, family, x, y, w }: Metadata) {
+    fn set_metadata(&mut self, Metadata { given, family, x, y, w, rotate }: Metadata) {
         self.given  = given;
         self.family = family;
         self.x = x;
         self.y = y;
         self.w = w;
+        self.rotate = rotate;
+    }
+
+    fn rotated(&self) -> DynamicImage {
+        let image = &self.image;
+        macro_rules! time {
+            ($it:expr) => {{
+                let start = Instant::now();
+                let it = $it;
+                println!("took {:.0?}", start.elapsed());
+                it
+            }};
+        }
+        match self.rotate {
+            0 => time!(image.clone()),
+            1 => time!(image.rotate90()),
+            2 => time!(image.rotate180()),
+            3 => time!(image.rotate270()),
+            _ => unreachable!(),
+        }
     }
 
     pub fn load(path: impl AsRef<Path>) -> Option<Cropped> {
         let start = Instant::now();
         let image = image::open(&path).ok()?;
         let elapsed = start.elapsed();
-        let image = image.rotate270();
         println!("Loaded {path} in {elapsed:.0?}", path = path.as_ref().display());
 
         let mut new = Self::new(&path, image);
@@ -320,11 +342,12 @@ impl Cropped {
     }
 
     fn make_metadata_segment(&self) -> JpegSegment {
-        let &Self { x, y, w, .. } = self;
+        let &Self { x, y, w, rotate, .. } = self;
         let metadata = Metadata {
             given : self.given .clone(),
             family: self.family.clone(),
-            x, y, w
+            x, y, w,
+            rotate,
         };
         let metadata = bitcode::encode(&metadata);
         JpegSegment::new_with_contents(
@@ -336,7 +359,7 @@ impl Cropped {
     fn get(&self) -> DynamicImage {
         let &Self { x, y, w, .. } = self;
         let h = self.h();
-        self.image.crop_imm((x-w/2) as u32, (y-h/2) as u32, w as u32, h as u32)
+        self.rotated().crop_imm((x-w/2) as u32, (y-h/2) as u32, w as u32, h as u32)
     }
 
     pub fn write(&self, path: impl AsRef<Path>) -> Result<(), image::ImageError> {
@@ -363,6 +386,8 @@ impl Cropped {
     fn zoom_out(&mut self, n: i32) { let &mut Self {x, y, w, ..} = self; self.xxx(x  , y  , w+n) }
     fn max_h(&self) -> i32 { self.image.height() as i32 }
     fn max_w(&self) -> i32 { self.image.width () as i32 }
+    fn rot_r(&mut self) { self.rotate = dbg!((self.rotate + 1).rem_euclid(4)); }
+    fn rot_l(&mut self) { self.rotate = dbg!((self.rotate - 1).rem_euclid(4)); }
 }
 
 fn crop_interactively(
@@ -377,9 +402,9 @@ fn crop_interactively(
         //println!("{:#?}", event);
         if let event::WindowEvent::KeyboardInput(event) = event {
             use event::VirtualKeyCode::*;
-            use show_image::event::KeyboardInput as KI;
+            use show_image::event::KeyboardInput  as KI;
             use show_image::event::ModifiersState as MS;
-            use show_image::event::ElementState as ES;
+            use show_image::event::ElementState   as ES;
             let KI { scan_code: _, key_code: _, state, modifiers  } = event.input;
             if state != ES::Pressed { continue; }
             let mut step_size = 10;
@@ -393,6 +418,7 @@ fn crop_interactively(
                 ($method:ident) => {
                     let face = &mut faces[face_n];
                     face.$method(step_size);
+                    dbg!(face.rotate);
                     window.set_image("label", face.get()).unwrap();
                 };
             }
@@ -406,6 +432,8 @@ fn crop_interactively(
                     P     =>  { limit!(zoom_out); }
                     G     =>  { limit!(zoom_in ); }
                     S     =>  { save_and_regenerate(faces, dirs) }
+                    R     =>  { faces[face_n].rot_r(); window.set_image("label", faces[face_n].get()).unwrap()  }
+                    L     =>  { faces[face_n].rot_l(); window.set_image("label", faces[face_n].get()).unwrap()  }
                     Back  =>  { face_n = face_n.saturating_sub(1);             show!(); }
                     Space =>  { face_n = (face_n + 1).clamp(0, faces.len()-1); show!(); }
                     _ => {}
