@@ -1,10 +1,5 @@
 use std::{
-    cmp::Ordering,
-    ffi::OsStr,
-    fs::{self, File},
-    io::Write,
-    time::Instant,
-    path::{Path, PathBuf},
+    cmp::Ordering, ffi::OsStr, fs::{self, File}, io::{self, Write}, path::{Path, PathBuf}, time::Instant
 };
 
 use image::{DynamicImage, GenericImageView, codecs::jpeg::JpegEncoder};
@@ -36,6 +31,7 @@ struct Dirs {
     class: PathBuf,
     photo: PathBuf,
     render: PathBuf,
+    work: PathBuf,
 }
 
 impl Dirs {
@@ -43,8 +39,9 @@ impl Dirs {
         let class: PathBuf = class_dir.as_ref().into();
         Self {
             photo: class.join("Complet"),
-            render: "/tmp/trombinoscope-working-dir".into(), //class.join("Recadré"),
+            render: class.join("Recadré"),
             class,
+            work: "/tmp/trombinoscope-working-dir".into(),
         }
     }
     fn class_name(&self) -> String { class_from_dir(&self.class)  }
@@ -89,12 +86,12 @@ fn render(
         FileType::Labels => format!("étiquettes_{class_name}"),
     });
 
-    let typst_src_path = dir.render.join(&typst_src_filename);
+    let typst_src_path = dir.work.join(&typst_src_filename);
     let mut out = File::create(&typst_src_path).unwrap();
     out.write_all(content.as_bytes()).unwrap();
 
     // Create world with content.
-    let world = TypstWrapperWorld::new(dir.render.display().to_string(), content.clone());
+    let world = TypstWrapperWorld::new(dir.work.display().to_string(), content.clone());
 
     // Render document
     let mut tracer = Tracer::default();
@@ -106,16 +103,11 @@ fn render(
     // Output to pdf
     let pdf_bytes = typst_pdf::pdf(&document, Smart::Auto, None);
 
-    let pdf_path = trombi_file_for_dir(&dir.render, &dir.class_name(), ftype);
+    let pdf_path = trombi_file_for_dir(&dir.work, &dir.class_name(), ftype);
     let pdf_path_display = pdf_path.display();
 
     fs::write(&pdf_path, pdf_bytes)
         .unwrap_or_else(|err| panic!("Error writing {pdf_path_display}:\n{err:?}"));
-
-    fs::copy(
-        trombi_file_for_dir(&dir.render, &dir.class_name(), ftype),
-        trombi_file_for_dir(&dir.class , &dir.class_name(), ftype),
-    ).unwrap();
 
     let moved_pdf_path = trombi_file_for_dir(&dir.class, &dir.class_name(), ftype);
     let moved_pdf_path_display = moved_pdf_path.display();
@@ -426,19 +418,13 @@ fn crop_interactively(
 
 fn save_and_regenerate(faces: &[Cropped], dirs: &Dirs) {
     save_crop_metadata(faces);
-    ensure_empty_dir(&dirs.render);
-    write_cropped_images(&faces, &dirs.render);
+    ensure_empty_dir(&dirs.work).unwrap();
+    write_cropped_images(&faces, &dirs.work);
     trombinoscope(&dirs);
 }
 
-fn ensure_empty_dir(dir: impl AsRef<Path>) {
-    std::fs::create_dir_all(&dir).unwrap(); // Ensure it exists so next line works
-    std::fs::remove_dir_all(&dir).unwrap(); // Remove it and its contents
-    std::fs::create_dir_all(&dir).unwrap(); // Ensure it exists
-}
-
 fn trombinoscope(dir: &Dirs) {
-    let items = find_jpgs_in_dir(&dir.render)
+    let items = find_jpgs_in_dir(&dir.work)
         .iter()
         .filter_map(path_to_item)
         .collect::<Vec<_>>();
@@ -446,8 +432,22 @@ fn trombinoscope(dir: &Dirs) {
     let mut items = items.to_vec();
     items.sort_by(family_given);
 
-    render(trombi_typst_src(&items, dir), &dir, FileType::Trombi);
-    render(labels_typst_src(&items, dir), &dir, FileType::Labels);
+    use FileType::*;
+    render(trombi_typst_src(&items, dir), &dir, Trombi);
+    render(labels_typst_src(&items, dir), &dir, Labels);
+
+    copy_recursively(&dir.work, &dir.render).unwrap();
+
+    fs::copy(
+        dbg!(trombi_file_for_dir(&dir.render, &dir.class_name(), Trombi)),
+        dbg!(trombi_file_for_dir(&dir.class , &dir.class_name(), Trombi)),
+    ).unwrap();
+
+    fs::copy(
+        dbg!(trombi_file_for_dir(&dir.render, &dir.class_name(), Labels)),
+        dbg!(trombi_file_for_dir(&dir.class , &dir.class_name(), Labels)),
+    ).unwrap();
+
 }
 
 fn path_to_item(image_path: impl AsRef<Path>) -> Option<Item> {
@@ -528,4 +528,20 @@ fn trombi_file_for_dir(dir: impl AsRef<Path>, class_name: &str, ftype: FileType)
         Trombi => format!("trombinoscope_{class_name}.pdf"),
         Labels => format!("étiquettes_{class_name}.pdf"),
     })
+}
+
+fn copy_recursively(from: impl AsRef<Path>, to: impl AsRef<Path>) -> io::Result<()> {
+    std::process::Command::new("cp")
+        .arg("-r")
+        .arg(from.as_ref().as_os_str())
+        .arg(  to.as_ref().as_os_str())
+        .output()?;
+    Ok(())
+}
+
+fn ensure_empty_dir(dir: impl AsRef<Path>) -> std::io::Result<()> {
+    let dir = dir.as_ref().as_os_str();
+    std::process::Command::new("rm")   .arg("-rf").arg(dir).output()?;
+    std::process::Command::new("mkdir").arg("-p" ).arg(dir).output()?;
+    Ok(())
 }
