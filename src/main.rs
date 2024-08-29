@@ -53,6 +53,19 @@ impl Dirs {
 #[show_image::main]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
+
+    if cli.strip_metadata {
+        let mut stdout = console::Term::stdout();
+        stdout.write(b"\n\nARE YOU SURE THAT YOU WANT TO STRIP METADATA ?  This cannot be undone!
+To continue with stripped metadata, press '@'.
+Otherwise press any other key and rerun the program without the `--strip-metadata option`
+").unwrap();
+        if stdout.read_key().unwrap() != console::Key::Char('@') {
+            println!("\nNot stripping metadata. Stopping. Rerun without `--strip-metadata`.");
+            std::process::exit(0);
+        }
+    }
+
     let dirs = Dirs::new(cli.class_dir);
 
     let start = Instant::now();
