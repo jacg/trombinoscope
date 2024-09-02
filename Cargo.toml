@@ -1,7 +1,10 @@
 [workspace]
 
-members = [ "render",
+members = [
+        "face",
+        "render",
         "trombinoscope",
+        "util",
 ]
 
 resolver = "2"

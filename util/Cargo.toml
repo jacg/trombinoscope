@@ -1,0 +1,11 @@
+[package]
+name = "util"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[dev-dependencies]
+nextest = "0.0.0"
+pretty_assertions = "1.4.0"
+rstest = "0.22.0"

@@ -1,0 +1,10 @@
+[package]
+name = "face"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bitcode = "0.6.3"
+image = "0.25.1"
+img-parts = "0.3.0"
+util = { path = "../util" }
