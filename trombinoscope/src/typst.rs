@@ -214,7 +214,7 @@ impl typst::World for TypstWrapperWorld {
 
 /// Helper function
 fn fonts() -> Vec<Font> {
-    let bytes = include_bytes!("../fonts/Inconsolata-Black.ttf");
+    let bytes = include_bytes!("../../fonts/Inconsolata-Black.ttf");
     let buffer = Bytes::from_static(bytes);
     vec![Font::new(buffer, 0).unwrap()]
 }
