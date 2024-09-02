@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+        "cli",
         "face",
         "render",
         "ui-show-image",

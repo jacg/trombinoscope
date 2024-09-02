@@ -1,31 +1,18 @@
 use std::{
     io::Write,
-    path::{Path, PathBuf},
+    path::Path,
     time::Instant
 };
 
-use show_image::event;
-
-use clap::Parser;
-use show_image::create_window;
-
+use show_image::{create_window, event};
 
 use face::{Cropped, write_cropped_images, save_crop_metadata};
 use render::trombinoscope;
 use util::{Dirs, ensure_empty_dir};
 
-#[derive(Parser)]
-struct Cli {
-    /// Directory containing the class assets
-    class_dir: PathBuf,
-
-    #[arg(long)]
-    strip_metadata: bool,
-}
-
 #[show_image::main]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli = Cli::parse();
+    let cli = cli::parse();
 
     if cli.strip_metadata {
         let mut stdout = console::Term::stdout();
