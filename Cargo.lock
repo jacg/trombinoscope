@@ -959,11 +959,11 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "fontconfig-parser"
-version = "0.5.6"
+version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a595cb550439a117696039dfc69830492058211b771a2a165379f2a1a53d84d"
+checksum = "c1fcfcd44ca6e90c921fee9fa665d530b21ef1327a4c1a6c5250ea44b776ada7"
 dependencies = [
- "roxmltree",
+ "roxmltree 0.20.0",
 ]
 
 [[package]]
@@ -2700,7 +2700,12 @@ checksum = "ba39f3699c378cd8970968dcbff9c43159ea4cfbd88d43c00b22f2ef10a435d2"
 name = "render"
 version = "0.1.0"
 dependencies = [
+ "comemo",
+ "tar",
+ "time",
  "typst",
+ "ureq",
+ "zune-inflate",
 ]
 
 [[package]]
@@ -2755,6 +2760,12 @@ name = "roxmltree"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3cd14fd5e3b777a7422cca79358c57a8f6e3a703d9ac187448d0daf220c2407f"
+
+[[package]]
+name = "roxmltree"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rstest"
@@ -3491,7 +3502,6 @@ version = "0.1.0"
 dependencies = [
  "bitcode",
  "clap",
- "comemo",
  "console",
  "image 0.25.2",
  "img-parts",
@@ -3500,13 +3510,8 @@ dependencies = [
  "render",
  "rstest",
  "show-image",
- "tar",
- "time",
- "ttf-parser 0.24.0",
  "typst",
  "typst-pdf",
- "ureq",
- "zune-inflate",
 ]
 
 [[package]]
@@ -3574,7 +3579,7 @@ dependencies = [
  "qcms",
  "rayon",
  "regex",
- "roxmltree",
+ "roxmltree 0.19.0",
  "rustybuzz",
  "serde",
  "serde_json",
@@ -3839,7 +3844,7 @@ dependencies = [
  "imagesize",
  "kurbo",
  "log",
- "roxmltree",
+ "roxmltree 0.19.0",
  "simplecss",
  "siphasher 0.3.11",
  "svgtypes",

@@ -8,19 +8,13 @@ edition = "2021"
 [dependencies]
 bitcode = "0.6.3"
 clap = { version = "4.5.16", features = ["derive", "wrap_help"] }
-comemo = "0.4.0"
 console = "0.15.8"
 image = "0.25.1"
 img-parts = "0.3.0"
 render = { path = "../render" }
 show-image = { version = "0.14.0", features = ["image"] }
-tar = "0.4.41"
-time = "0.3.36"
-ttf-parser = "0.24.0"
 typst = "0.11.1"
 typst-pdf = "0.11.1"
-ureq = "2.10.0"
-zune-inflate = "0.2.54"
 
 [dev-dependencies]
 nextest = "0.0.0"

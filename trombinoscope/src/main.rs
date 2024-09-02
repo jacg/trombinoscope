@@ -15,9 +15,10 @@ use typst::{
     eval::Tracer,
 };
 
+use render::TypstWrapperWorld;
+
 use trombinoscope::{
     self as tromb,
-    typst::TypstWrapperWorld,
 };
 
 #[derive(Parser)]
