@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if cli.strip_metadata {
         let mut stdout = console::Term::stdout();
-        stdout.write(b"\n\nARE YOU SURE THAT YOU WANT TO STRIP METADATA ?  This cannot be undone!
+        stdout.write_all(b"\n\nARE YOU SURE THAT YOU WANT TO STRIP METADATA ?  This cannot be undone!
 To continue with stripped metadata, press '@'.
 Otherwise press any other key and rerun the program without the `--strip-metadata option`
 ").unwrap();
@@ -102,7 +102,7 @@ fn render(
     });
 
     let typst_src_path = dir.work.join(&typst_src_filename);
-    let mut out = File::create(&typst_src_path).unwrap();
+    let mut out = File::create(typst_src_path).unwrap();
     out.write_all(content.as_bytes()).unwrap();
 
     // Create world with content.
@@ -473,8 +473,8 @@ fn save_and_regenerate(faces: &[Cropped], dirs: &Dirs) {
     save_crop_metadata(faces);
     ensure_empty_dir(&dirs.work).unwrap();
     ensure_empty_dir(&dirs.render).unwrap();
-    write_cropped_images(&faces, &dirs.work);
-    trombinoscope(&dirs);
+    write_cropped_images(faces, &dirs.work);
+    trombinoscope(dirs);
 }
 
 fn trombinoscope(dir: &Dirs) {
@@ -487,8 +487,8 @@ fn trombinoscope(dir: &Dirs) {
     items.sort_by(family_given);
 
     use FileType::*;
-    render(trombi_typst_src(&items, dir), &dir, Trombi);
-    render(labels_typst_src(&items, dir), &dir, Labels);
+    render(trombi_typst_src(&items, dir), dir, Trombi);
+    render(labels_typst_src(&items, dir), dir, Labels);
 
     unix_rm_rf(&dir.render).unwrap();
     unix_mv(&dir.work, &dir.render).unwrap();
