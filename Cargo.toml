@@ -3,7 +3,7 @@
 members = [
         "face",
         "render",
-        "trombinoscope",
+        "ui-show-image",
         "util",
 ]
 
