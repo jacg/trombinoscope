@@ -10,6 +10,12 @@ use typst::syntax::{FileId, Source};
 use typst::text::{Font, FontBook};
 use typst::Library;
 
+use render::{
+    http_successful,
+    retry,
+    fonts,
+};
+
 /// Main interface that determines the environment for Typst.
 pub struct TypstWrapperWorld {
     /// Root path to which files will be resolved.
@@ -210,24 +216,4 @@ impl typst::World for TypstWrapperWorld {
         let time = self.time.checked_to_offset(offset)?;
         Some(Datetime::Date(time.date()))
     }
-}
-
-/// Helper function
-fn fonts() -> Vec<Font> {
-    let bytes = include_bytes!("../../fonts/Inconsolata-Black.ttf");
-    let buffer = Bytes::from_static(bytes);
-    vec![Font::new(buffer, 0).unwrap()]
-}
-
-fn retry<T, E>(mut f: impl FnMut() -> Result<T, E>) -> Result<T, E> {
-    if let Ok(ok) = f() {
-        Ok(ok)
-    } else {
-        f()
-    }
-}
-
-fn http_successful(status: u16) -> bool {
-    // 2XX
-    status / 100 == 2
 }
