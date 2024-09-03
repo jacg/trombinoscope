@@ -1,7 +1,4 @@
-use std::{
-    f32::consts::TAU,
-    path::PathBuf,
-};
+use std::f32::consts::TAU;
 
 use face::face::FaceInImage;
 use macroquad::prelude::*;
@@ -56,8 +53,8 @@ async fn main() {
             if is_key_down   (Left     ) { face.move_right(-d); }
             if is_key_down   (Down     ) { face.move_down ( d); }
             if is_key_down   (Up       ) { face.move_down (-d); }
-            if is_key_down   (G        ) { face.widen     ( d); }
-            if is_key_down   (P        ) { face.widen     (-d); }
+            if is_key_down   (G        ) { face.enlarge   ( d); }
+            if is_key_down   (P        ) { face.enlarge   (-d); }
             if is_key_pressed(R        ) { face.rotate    ( 1); }
             if is_key_pressed(L        ) { face.rotate    (-1); }
             if is_key_pressed(Space    ) && face_n < n_faces - 1 { face_n += 1; }
@@ -92,19 +89,24 @@ use face::error as ferr;
 impl face::face::InMemoryImage for MqImage {
     type Render = RenderMq;
     fn replace_image(&mut self, path: impl AsRef<std::path::Path>) -> face::error::Result<()> { todo!() }
-    fn move_right  (&mut self, dx: f32) -> ferr::Result<f32> { todo!() }
-    fn move_down   (&mut self, dy: f32) -> ferr::Result<f32> { todo!() }
-    fn widen       (&mut self, dw: f32) -> ferr::Result<f32> { todo!() }
-    fn rotate(&mut self, rot: i8)       -> ferr::Result<i8>  { todo!() }
-    fn save(&self)                      -> ferr::Result<()>  { todo!() }
-    fn full_w(&self)                    -> ferr::Result<f32> { Ok(self.texture.size().x) }
-    fn full_h(&self)                    -> ferr::Result<f32> { Ok(self.texture.size().y) }
+    fn set_cx (&mut self, x: f32)  -> ferr::Result<f32> { Ok(x) }
+    fn set_cy (&mut self, y: f32)  -> ferr::Result<f32> { Ok(y) }
+    fn set_w  (&mut self, w: f32)  -> ferr::Result<f32> { Ok(w) }
+    fn set_rot(&mut self, rot: i8) -> ferr::Result<i8>  { Ok(rot) }
+    fn save  (&self)               -> ferr::Result<()>  { Err(ferr::Error::Todo) }
+    fn full_w(&self)               -> ferr::Result<f32> { Ok(self.texture.size().x) }
+    fn full_h(&self)               -> ferr::Result<f32> { Ok(self.texture.size().y) }
     fn render(
         &self,
         &FaceInImage { cx, cy, w, rot, .. }: &FaceInImage,
         &Self::Render { col, row, col_w, row_h, color }: &Self::Render
     ) -> face::error::Result<()> {
-        let Vec2 { x: full_w, y: full_h } = self.texture.size();
+
+        let (full_w, full_h, rotate) = {
+            let Vec2 { x, y } = self.texture.size();
+            if x < y {(x, y, 0)} else {(y, x, 3)}
+        } ;
+
         let h = w * ASPECT_RATIO;
         let x_ =          cx - w/2.;
         let xi = full_w - cx - w/2.;
@@ -146,31 +148,3 @@ struct RenderMq {
     row_h: f32,
     color: Color,
 }
-
-type NewMqFace = face::face::Face<MqImage>;
-
-
-
-
-// impl FaceMq {
-//     async fn new(path: &str) -> Self {
-//         let texture = load_texture(path).await.unwrap();
-//         let (full_w, full_h, rotate) = {
-//             let Vec2 { x, y } = texture.size();
-//             if x < y {(x, y, 0)} else {(y, x, 3)}
-//         } ;
-//         let (frac_cx, frac_cy, frac_w) = (0.5, 0.15, 0.18);
-//         let w  = frac_w *  full_w;
-//         let cx = frac_cx * full_w;
-//         let cy = frac_cy * full_h;
-//         Self {
-//             path: path.into(),
-//             given: "TODO Prénom".into(),
-//             family: "TODO Nom".into(),
-//             full_w, full_h,
-//             cx, cy, w,
-//             rotate,
-//             texture,
-//         }
-//     }
-// }

@@ -1,4 +1,3 @@
-
 use std::{
     fs::File,
     io::Write,
@@ -69,7 +68,6 @@ impl Cropped {
             2 => unrotated.rotate180(),
             3 => unrotated.rotate270(),
             _ => unreachable!(),
-
         }
     }
 

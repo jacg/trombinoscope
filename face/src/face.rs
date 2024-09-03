@@ -11,10 +11,10 @@ pub struct Face<Image: InMemoryImage> {
 pub trait InMemoryImage {
     type Render; // UI-specific information needed by render
     fn replace_image(&mut self, path: impl AsRef<Path>) -> Result<()>;
-    fn move_right  (&mut self, dx: f32)                 -> Result<f32>;
-    fn move_down   (&mut self, dy: f32)                 -> Result<f32>;
-    fn widen(&mut self, dw: f32)                        -> Result<f32>;
-    fn rotate(&mut self, rot: i8)                       -> Result<i8>;
+    fn set_cx (&mut self, x: f32)                       -> Result<f32>;
+    fn set_cy (&mut self, y: f32)                       -> Result<f32>;
+    fn set_w  (&mut self, w: f32)                       -> Result<f32>;
+    fn set_rot(&mut self, rot: i8)                      -> Result<i8>;
     fn save(&self)                                      -> Result<()>;
     fn render(
         &self,
@@ -25,26 +25,42 @@ pub trait InMemoryImage {
     fn full_h(&self) -> Result<f32>;
 }
 
-impl<C: InMemoryImage> Face<C> {
-    pub fn new(path: impl AsRef<Path>, image: impl InMemoryImage) -> Result<Self> {
+macro_rules! meth_coordinated_with_details {
+    ($outer_meth:ident $inner_meth:ident $attr:ident) => {
+        pub fn $outer_meth(&mut self, delta: f32) -> Result<f32> {
+            self.
+                in_memory_image
+                .$inner_meth(self.detail.$attr - delta)
+                .inspect(|&res| self.detail.$attr = res)
+        }
+    };
+}
 
+impl<MemImg: InMemoryImage> Face<MemImg> {
+    pub fn new(path: impl AsRef<Path>, in_memory_image: MemImg) -> Result<Self> {
+
+        let i = &in_memory_image;
+        let (full_w, full_h, rot) = {
+            let x = i.full_w().unwrap();
+            let y = i.full_h().unwrap();
+            if x < y {(x, y, 0)} else {(y, x, 3)}
+        };
 
         let (frac_cx, frac_cy, frac_w) = (0.5, 0.15, 0.18);
-        let w  = frac_w *  image.full_w().unwrap();
-        let cx = frac_cx * image.full_w().unwrap();
-        let cy = frac_cy * image.full_h().unwrap();
-
+        let w  = frac_w *  full_w;
+        let cx = frac_cx * full_w;
+        let cy = frac_cy * full_h;
 
         let detail = FaceInImage {
-            given: "Prénom".into(),
-            family:"Nom".into(),
+            given: "TODO Prénom".into(),
+            family:"TODO Nom".into(),
             cx, cy, w,
-            rot: todo!(),
+            rot,
         };
         let new = Self {
             full_image_path: path.as_ref().to_owned(),
-            detail: todo!(),
-            in_memory_image: todo!(),
+            detail,
+            in_memory_image,
         };
         Ok(new)
     }
@@ -53,27 +69,20 @@ impl<C: InMemoryImage> Face<C> {
     /// Remove all of our metadata from the JPEG image at `path`
     pub fn strip_metadata(path: impl AsRef<Path>) -> Result<()> { todo!() }
 
-    pub fn move_right(&mut self, dx: f32) -> Result<f32> {
-        self.in_memory_image.move_right(dx).inspect(|&x| self.detail.cx = x)
-    }
-
-    pub fn move_down(&mut self, dy: f32) -> Result<f32> {
-        self.in_memory_image.move_down(dy).inspect(|&y| self.detail.cy = y)
-    }
-
-    pub fn widen(&mut self, dw: f32) -> Result<f32> {
-        self.in_memory_image.widen(dw).inspect(|&w| self.detail.w = w)
-    }
+    meth_coordinated_with_details!{move_right set_cx cx}
+    meth_coordinated_with_details!{move_down  set_cy cy}
+    meth_coordinated_with_details!{enlarge    set_w  w }
 
     pub fn rotate(&mut self, rot: i8) -> Result<i8> {
+        let rot = (self.detail.rot + rot).rem_euclid(4);
         self
             .in_memory_image
-            .rotate(rot)
-            .inspect(|&qtc| self.detail.rot = qtc)
+            .set_rot(rot)
+            .inspect(|_| self.detail.rot = rot)
     }
 
-    pub fn render(&self, render: C::Render) -> Result<()> {
-        todo!()
+    pub fn render(&self, render: MemImg::Render) -> Result<()> {
+        self.in_memory_image.render(&self.detail, &render)
     }
 }
 
