@@ -13,7 +13,7 @@ pub trait InMemoryImage {
     fn replace_image(&mut self, path: impl AsRef<Path>) -> Result<()>;
     fn move_right  (&mut self, dx: f32)                 -> Result<f32>;
     fn move_down   (&mut self, dy: f32)                 -> Result<f32>;
-    fn change_width(&mut self, dw: f32)                 -> Result<f32>;
+    fn widen(&mut self, dw: f32)                        -> Result<f32>;
     fn rotate(&mut self, rot: i8)                       -> Result<i8>;
     fn save(&self)                                      -> Result<()>;
     fn render(
@@ -21,10 +21,33 @@ pub trait InMemoryImage {
         detail: &FaceInImage,
         x: &Self::Render
     ) -> Result<()>;
+    fn full_w(&self) -> Result<f32>;
+    fn full_h(&self) -> Result<f32>;
 }
 
 impl<C: InMemoryImage> Face<C> {
-    pub fn new_from_path(path: impl AsRef<Path>) -> Result<Self> { todo!() }
+    pub fn new(path: impl AsRef<Path>, image: impl InMemoryImage) -> Result<Self> {
+
+
+        let (frac_cx, frac_cy, frac_w) = (0.5, 0.15, 0.18);
+        let w  = frac_w *  image.full_w().unwrap();
+        let cx = frac_cx * image.full_w().unwrap();
+        let cy = frac_cy * image.full_h().unwrap();
+
+
+        let detail = FaceInImage {
+            given: "Prénom".into(),
+            family:"Nom".into(),
+            cx, cy, w,
+            rot: todo!(),
+        };
+        let new = Self {
+            full_image_path: path.as_ref().to_owned(),
+            detail: todo!(),
+            in_memory_image: todo!(),
+        };
+        Ok(new)
+    }
     pub fn find_in_path(path: impl AsRef<Path>) -> Result<Self> { todo!() }
 
     /// Remove all of our metadata from the JPEG image at `path`
@@ -38,8 +61,8 @@ impl<C: InMemoryImage> Face<C> {
         self.in_memory_image.move_down(dy).inspect(|&y| self.detail.cy = y)
     }
 
-    pub fn change_width(&mut self, dw: f32) -> Result<f32> {
-        self.in_memory_image.change_width(dw).inspect(|&w| self.detail.w = w)
+    pub fn widen(&mut self, dw: f32) -> Result<f32> {
+        self.in_memory_image.widen(dw).inspect(|&w| self.detail.w = w)
     }
 
     pub fn rotate(&mut self, rot: i8) -> Result<i8> {
@@ -47,6 +70,10 @@ impl<C: InMemoryImage> Face<C> {
             .in_memory_image
             .rotate(rot)
             .inspect(|&qtc| self.detail.rot = qtc)
+    }
+
+    pub fn render(&self, render: C::Render) -> Result<()> {
+        todo!()
     }
 }
 
