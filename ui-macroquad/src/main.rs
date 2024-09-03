@@ -3,6 +3,7 @@ use std::{
     path::PathBuf,
 };
 
+use face::face::FaceInImage;
 use macroquad::prelude::*;
 
 use util::find_jpgs_in_dir;
@@ -33,8 +34,8 @@ async fn main() {
 
     let mut faces = vec![];
     let start = std::time::Instant::now();
-    for jpg in find_jpgs_in_dir(&path).into_iter().take(30) {
-        faces.push(Face::new(&jpg.to_string_lossy()).await)
+    for jpg in find_jpgs_in_dir(&path).into_iter() {
+        faces.push(FaceMq::new(&jpg.to_string_lossy()).await)
     }
     println!("Loading of images took {:.0?}", start.elapsed());
 
@@ -78,9 +79,54 @@ async fn main() {
     println!("TODO implement: Saving images.")
 }
 
+struct MqImage {
+    texture: Texture2D,
+}
+
+impl face::face::InMemoryImage for MqImage {
+    fn replace_image(&mut self, path: impl AsRef<std::path::Path>) -> face::error::Result<()> {
+        todo!()
+    }
+
+    fn move_right  (&mut self, dx: f32)                 -> face::error::Result<f32> {
+        todo!()
+    }
+
+    fn move_down   (&mut self, dy: f32)                 -> face::error::Result<f32> {
+        todo!()
+    }
+
+    fn change_width(&mut self, dw: f32)                 -> face::error::Result<f32> {
+        todo!()
+    }
+
+    fn rotate(&mut self, quarter_turns_clockwise: i8)   -> face::error::Result<i8> {
+        todo!()
+    }
+
+    fn save(&self)                                      -> face::error::Result<()> {
+        todo!()
+    }
+
+    fn full_width (&self)                               -> face::error::Result<f32> {
+        todo!()
+    }
+
+    fn full_height(&self)                               -> face::error::Result<f32> {
+        todo!()
+    }
+
+    fn render(&self, detail: &FaceInImage)              -> face::error::Result<()> {
+        todo!()
+    }
+                                }
+
+type NewMqFace = face::face::Face<MqImage>;
+
+
 
 #[derive(Debug)]
-pub struct Face {
+pub struct FaceMq {
     pub path: PathBuf,
     pub given: String,
     pub family: String,
@@ -93,7 +139,7 @@ pub struct Face {
 }
 
 
-impl Face {
+impl FaceMq {
     async fn new(path: &str) -> Self {
         let texture = load_texture(path).await.unwrap();
         let (full_w, full_h, rotate) = {

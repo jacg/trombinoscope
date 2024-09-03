@@ -6,7 +6,7 @@ use std::{
 
 use show_image::{create_window, event};
 
-use face::{Cropped, write_cropped_images, save_crop_metadata};
+use face::old::{Cropped, write_cropped_images, save_crop_metadata};
 use render::trombinoscope;
 use util::{Dirs, ensure_empty_dir};
 
@@ -81,7 +81,6 @@ fn crop_interactively(
                 ($method:ident) => {
                     let face = &mut faces[face_n];
                     face.$method(step_size);
-                    dbg!(face.rotate);
                     window.set_image("label", face.get()).unwrap();
                 };
             }
