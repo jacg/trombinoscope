@@ -29,9 +29,7 @@ async fn main() {
         number: 0.0,
     };
 
-    let mut args = std::env::args();
-    let _executable = args.next();
-    let path = args.next().unwrap();
+    let path = cli::parse().class_dir.join("Complet");
 
     let mut faces = vec![];
     let start = std::time::Instant::now();
