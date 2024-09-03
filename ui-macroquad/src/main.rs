@@ -81,45 +81,66 @@ async fn main() {
 
 struct MqImage {
     texture: Texture2D,
+    full_w: f32,
+    full_h: f32,
 }
 
 impl face::face::InMemoryImage for MqImage {
-    fn replace_image(&mut self, path: impl AsRef<std::path::Path>) -> face::error::Result<()> {
-        todo!()
+    type Render = RenderMq;
+    fn replace_image(&mut self, path: impl AsRef<std::path::Path>) -> face::error::Result<()> { todo!() }
+    fn move_right  (&mut self, dx: f32)                 -> face::error::Result<f32> { todo!() }
+    fn move_down   (&mut self, dy: f32)                 -> face::error::Result<f32> { todo!() }
+    fn change_width(&mut self, dw: f32)                 -> face::error::Result<f32> { todo!() }
+    fn rotate(&mut self, rot: i8)                       -> face::error::Result<i8>  { todo!() }
+    fn save(&self)                                      -> face::error::Result<()>  { todo!() }
+
+    fn render(
+        &self,
+        &FaceInImage { cx, cy, w, rot, .. }: &FaceInImage,
+        &Self::Render { col, row, col_w, row_h, color }: &Self::Render
+    ) -> face::error::Result<()> {
+        let Self { full_w, full_h, .. } = self;
+        let h = w * ASPECT_RATIO;
+        let x_ =          cx - w/2.;
+        let xi = full_w - cx - w/2.;
+        let y_ =          cy - h/2.;
+        let yi = full_h - cy - h/2.;
+
+        let (     x , y ,   w, h,   dest_x, dest_y,   dx   , dy   ) = match rot {
+            0 => (x_, y_,   w, h,   col_w , row_h ,   col_w, row_h),
+            1 => (y_, xi,   h, w,   row_h , col_w ,   row_h, col_w),
+            2 => (xi, yi,   w, h,   col_w , row_h ,   col_w, row_h),
+            3 => (yi, x_,   h, w,   row_h , col_w ,   row_h, col_w),
+            _ => unreachable!(),
+        };
+
+        let x_piv = col_w * (col as f32 + 0.5);
+        let y_piv = row_h * (row as f32 + 0.5);
+        let x_pos = x_piv - dx/2.;
+        let y_pos = y_piv - dy/2.;
+
+        draw_texture_ex(
+            &self.texture, x_pos, y_pos, color,
+            DrawTextureParams {
+                dest_size: Some( Vec2 { x: dest_x, y: dest_y }),
+                source: Some(Rect { x, y, w, h, }),
+                rotation: rot as f32 * TAU/4.0,
+                pivot: Some(Vec2 { x: x_piv , y: y_piv }),
+                flip_x: false, flip_y: false,
+            }
+        );
+        Ok(())
     }
 
-    fn move_right  (&mut self, dx: f32)                 -> face::error::Result<f32> {
-        todo!()
-    }
+}
 
-    fn move_down   (&mut self, dy: f32)                 -> face::error::Result<f32> {
-        todo!()
-    }
-
-    fn change_width(&mut self, dw: f32)                 -> face::error::Result<f32> {
-        todo!()
-    }
-
-    fn rotate(&mut self, quarter_turns_clockwise: i8)   -> face::error::Result<i8> {
-        todo!()
-    }
-
-    fn save(&self)                                      -> face::error::Result<()> {
-        todo!()
-    }
-
-    fn full_width (&self)                               -> face::error::Result<f32> {
-        todo!()
-    }
-
-    fn full_height(&self)                               -> face::error::Result<f32> {
-        todo!()
-    }
-
-    fn render(&self, detail: &FaceInImage)              -> face::error::Result<()> {
-        todo!()
-    }
-                                }
+struct RenderMq {
+    col: usize,
+    row: usize,
+    col_w: f32,
+    row_h: f32,
+    color: Color,
+}
 
 type NewMqFace = face::face::Face<MqImage>;
 

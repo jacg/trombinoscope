@@ -22,7 +22,7 @@ pub struct Cropped {
     w: i32,
     /// height to width aspect ratio
     r: (i32, i32),
-    pub rotate_quarter_turn_clockwise: i8,
+    pub rot: i8,
     rotated_cache: DynamicImage,
 }
 
@@ -46,22 +46,22 @@ impl Cropped {
             y: h as i32 / 4,
             w: w as i32 / 8,
             r: (5, 4),
-            rotate_quarter_turn_clockwise: 0,
+            rot: 0,
             rotated_cache: image,
         }
     }
 
-    fn set_metadata(&mut self, FaceInImage { given, family, cx: x, cy: y, w, rotate_quarter_turns_clockwise }: FaceInImage) {
+    fn set_metadata(&mut self, FaceInImage { given, family, cx: x, cy: y, w, rot }: FaceInImage) {
         self.given  = given;
         self.family = family;
-        self.x = x;
-        self.y = y;
-        self.w = w;
-        self.set_rotation(rotate_quarter_turns_clockwise);
+        self.x = x as i32;
+        self.y = y as i32;
+        self.w = w as i32;
+        self.set_rotation(rot);
     }
 
     fn set_rotation(&mut self, rotation: i8) {
-        self.rotate_quarter_turn_clockwise = rotation;
+        self.rot = rotation;
         let unrotated = &self.image;
         self.rotated_cache = match rotation {
             0 => unrotated.clone(),
@@ -119,12 +119,12 @@ Try stripping out metadata by rerunning trombinoscope with the --strip-metadata 
     }
 
     fn make_metadata_segment(&self) -> JpegSegment {
-        let &Self { x, y, w, rotate_quarter_turn_clockwise: rotate, .. } = self;
+        let &Self { x, y, w, rot: rotate, .. } = self;
         let metadata = FaceInImage {
             given : self.given .clone(),
             family: self.family.clone(),
-            cx: x, cy: y, w,
-            rotate_quarter_turns_clockwise: rotate,
+            cx: x as f32, cy: y as f32, w: w as f32,
+            rot: rotate,
         };
         let metadata = bitcode::encode(&metadata);
         JpegSegment::new_with_contents(
@@ -163,9 +163,9 @@ Try stripping out metadata by rerunning trombinoscope with the --strip-metadata 
     pub fn zoom_out(&mut self, n: i32) { let &mut Self {x, y, w, ..} = self; self.xxx(x  , y  , w+n) }
     pub fn max_h(&self) -> i32 { self.image.height() as i32 }
     pub fn max_w(&self) -> i32 { self.image.width () as i32 }
-    pub fn rot_r(&mut self) { self.set_rotation((self.rotate_quarter_turn_clockwise + 1).rem_euclid(4)); }
-    pub fn rot_l(&mut self) { self.set_rotation((self.rotate_quarter_turn_clockwise - 1).rem_euclid(4)); }
-    pub fn flip (&mut self) { self.set_rotation((self.rotate_quarter_turn_clockwise + 2).rem_euclid(4)); }
+    pub fn rot_r(&mut self) { self.set_rotation((self.rot + 1).rem_euclid(4)); }
+    pub fn rot_l(&mut self) { self.set_rotation((self.rot - 1).rem_euclid(4)); }
+    pub fn flip (&mut self) { self.set_rotation((self.rot + 2).rem_euclid(4)); }
 }
 
 fn read_jpeg(path: impl AsRef<Path>) -> Jpeg { bytes_to_jpeg(&std::fs::read(&path).unwrap()) }
