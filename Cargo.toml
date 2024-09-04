@@ -4,8 +4,8 @@ members = [
         "cli",
         "face",
         "render",
-        "ui-macroquad",
-        "ui-show-image",
+        "ui/macroquad",
+        "ui/show-image",
         "util",
 ]
 

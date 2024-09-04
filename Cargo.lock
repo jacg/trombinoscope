@@ -1856,6 +1856,19 @@ dependencies = [
 
 [[package]]
 name = "macroquad"
+version = "0.1.0"
+dependencies = [
+ "cli",
+ "console",
+ "face",
+ "image 0.25.2",
+ "macroquad 0.4.13",
+ "render",
+ "util",
+]
+
+[[package]]
+name = "macroquad"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81fef16b2d4de22ac372b5d7d76273c0ead0a31f9de9bc649af8f816816db8a8"
@@ -3075,6 +3088,18 @@ dependencies = [
 
 [[package]]
 name = "show-image"
+version = "0.1.0"
+dependencies = [
+ "cli",
+ "console",
+ "face",
+ "render",
+ "show-image 0.14.0",
+ "util",
+]
+
+[[package]]
+name = "show-image"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2d6d4263fd19c1fbd0f4bbc0e0128de55dce8beb8f7d9052e09ee7f104c9eeb"
@@ -3753,31 +3778,6 @@ dependencies = [
  "serde",
  "serde_json",
  "typst-syntax",
-]
-
-[[package]]
-name = "ui-macroquad"
-version = "0.1.0"
-dependencies = [
- "cli",
- "console",
- "face",
- "image 0.25.2",
- "macroquad",
- "render",
- "util",
-]
-
-[[package]]
-name = "ui-show-image"
-version = "0.1.0"
-dependencies = [
- "cli",
- "console",
- "face",
- "render",
- "show-image",
- "util",
 ]
 
 [[package]]
