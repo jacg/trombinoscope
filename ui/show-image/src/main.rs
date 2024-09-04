@@ -1,14 +1,15 @@
 use std::{
     io::Write,
-    path::Path,
     time::Instant
 };
 
 use show_image::{create_window, event};
 
-use face::old::{Cropped, write_cropped_images, save_crop_metadata};
-use render::trombinoscope;
-use util::{Dirs, ensure_empty_dir};
+use util::Dirs;
+
+mod face;
+
+use face::{CropSi, FaceSi, ViewSi};
 
 #[show_image::main]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -25,43 +26,46 @@ Otherwise press any other key and rerun the program without the `--strip-metadat
             std::process::exit(0);
         }
     }
+    let window = create_window("image", Default::default())?;
 
     let dirs = Dirs::new(cli.class_dir);
 
     let start = Instant::now();
     let mut faces = std::fs::read_dir(&dirs.photo)?
-        .take(100)
         .filter_map(|x| x.ok())
         .map(|p| p.path())
-        .filter_map(|path| Cropped::load(path, cli.strip_metadata))
+        .filter_map(|path| {
+            image::open(&path)
+                .ok()
+                .and_then(|image| FaceSi::new(path, CropSi {
+                    rotated_image: image,
+                    window: &window,
+                    rot: 0
+                }).ok())
+            // TODO cli.strip_metadata
+        })
         .collect::<Vec<_>>();
     println!("Loading all images took {:.1?}", start.elapsed());
 
-    let window = create_window("image", Default::default())?;
     crop_interactively(&mut faces, &window, &dirs).unwrap();
     save_and_regenerate(&faces, &dirs);
     Ok(())
 }
 
-fn write_cropped(in_file: impl AsRef<Path>, out_dir: impl AsRef<Path>) {
-    let cropped = Cropped::load(in_file, false).unwrap();
-    let out_file = out_dir.as_ref().join(cropped.path.file_name().unwrap());
-    println!("Writing {}", out_file.display());
-    cropped.write(out_file).unwrap();
-}
-
-
-
-
 fn crop_interactively(
-    faces: &mut [Cropped],
+    faces: &mut [FaceSi],
     window: &show_image::WindowProxy,
     dirs: &Dirs,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut face_n = 0;
-    macro_rules! show { () => { window.set_image("label", faces[face_n].get()).unwrap(); }; }
+    let view = ViewSi {  };
+
+    macro_rules! show { () => { faces[face_n].view(view).unwrap() }; }
     show!();
+
     for event in window.event_channel()? {
+        let face = &mut faces[face_n];
+        face.view(view).unwrap();
         //println!("{:#?}", event);
         if let event::WindowEvent::KeyboardInput(event) = event {
             use event::VirtualKeyCode::*;
@@ -73,30 +77,20 @@ fn crop_interactively(
             let mut step_size = 10;
             if modifiers.contains(MS::CTRL ) { step_size /= 10; }
             if modifiers.contains(MS::SHIFT) { step_size *=  5; }
-            // match event.input {
-            //     KI { key_code: Some(Escape), modifiers: MS::SHIFT.. } => {  },
-            //     _ => {},
-            // }
-            macro_rules! limit {
-                ($method:ident) => {
-                    let face = &mut faces[face_n];
-                    face.$method(step_size);
-                    window.set_image("label", face.get()).unwrap();
-                };
-            }
+            let step_size = step_size as f32;
+
             if let Some(code) = event.input.key_code {
                 match code {
                     Escape => if event.input.state.is_pressed() { break },
-                    Up    =>  { limit!(up      ); }
-                    Down  =>  { limit!(down    ); }
-                    Left  =>  { limit!(left    ); }
-                    Right =>  { limit!(right   ); }
-                    P     =>  { limit!(zoom_out); }
-                    G     =>  { limit!(zoom_in ); }
-                    S     =>  { save_and_regenerate(faces, dirs) }
-                    R     =>  { faces[face_n].rot_r(); window.set_image("label", faces[face_n].get()).unwrap()  }
-                    L     =>  { faces[face_n].rot_l(); window.set_image("label", faces[face_n].get()).unwrap()  }
-                    I     =>  { faces[face_n].flip (); window.set_image("label", faces[face_n].get()).unwrap()  }
+                    Down  => { face.move_down ( step_size); }
+                    Up    => { face.move_down (-step_size); }
+                    Right => { face.move_right( step_size); }
+                    Left  => { face.move_right(-step_size); }
+                    G     => { face.zoom_in   ( step_size); }
+                    P     => { face.zoom_in   (-step_size); }
+                    R     => { face.rotate    ( 1        ); }
+                    L     => { face.rotate    (-1        ); }
+                    // S     =>  { save_and_regenerate(faces, dirs) }
                     Back  =>  { face_n = face_n.saturating_sub(1);             show!(); }
                     Space =>  { face_n = (face_n + 1).clamp(0, faces.len()-1); show!(); }
                     _ => {}
@@ -107,10 +101,11 @@ fn crop_interactively(
     Ok(())
 }
 
-fn save_and_regenerate(faces: &[Cropped], dirs: &Dirs) {
-    save_crop_metadata(faces);
-    ensure_empty_dir(&dirs.work).unwrap();
-    ensure_empty_dir(&dirs.render).unwrap();
-    write_cropped_images(faces, &dirs.work);
-    trombinoscope(dirs);
+fn save_and_regenerate(faces: &[FaceSi], dirs: &Dirs) {
+    todo!()
+    // save_crop_metadata(faces);
+    // ensure_empty_dir(&dirs.work).unwrap();
+    // ensure_empty_dir(&dirs.render).unwrap();
+    // write_cropped_images(faces, &dirs.work);
+    // trombinoscope(dirs);
 }

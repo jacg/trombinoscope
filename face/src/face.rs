@@ -31,7 +31,7 @@ pub trait CropUi {
     fn view(
         &self,
         face: &FaceInImage,
-        x: &Self::View
+        view: &Self::View
     ) -> Result<()>;
     fn full_w(&self) -> Result<f32>;
     fn full_h(&self) -> Result<f32>;
@@ -63,9 +63,10 @@ impl<Crop: CropUi> Face<Crop> {
         let cx = frac_cx * full_w;
         let cy = frac_cy * full_h;
 
+        let basename = path.as_ref().file_name().unwrap();
+        let (given, family) = util::filename_to_given_family(basename).unwrap();
         let face = FaceInImage {
-            given: "TODO Prénom".into(),
-            family:"TODO Nom".into(),
+            given, family,
             cx, cy, w,
             rot,
         };
@@ -76,6 +77,15 @@ impl<Crop: CropUi> Face<Crop> {
         };
         Ok(new)
     }
+
+    // pub fn load(path: impl AsRef<Path>, strip_metadata: bool) -> Result<Self> {
+    //     let mut new = Self::new(&path, image);
+    //     let mut jpeg = read_jpeg(&path);
+    //     if strip_old_metadata { jpeg.remove_segments_by_marker(OUR_MARKER) }
+    //     Ok(todo!())
+    // }
+
+    /// NOT IMPLEMENTED YET: look for face metadata in JPEG at `path`
     pub fn find_in_path(path: impl AsRef<Path>) -> Result<Self> { todo!() }
 
     /// Remove all of our metadata from the JPEG image at `path`
@@ -83,7 +93,7 @@ impl<Crop: CropUi> Face<Crop> {
 
     meth_coordinated_with_face!{move_right set_cx cx}
     meth_coordinated_with_face!{move_down  set_cy cy}
-    meth_coordinated_with_face!{enlarge    set_w  w }
+    meth_coordinated_with_face!{zoom_in    set_w  w }
 
     pub fn rotate(&mut self, rot: i8) -> Result<i8> {
         let rot = (self.face.rot + rot).rem_euclid(4);
@@ -93,8 +103,8 @@ impl<Crop: CropUi> Face<Crop> {
             .inspect(|_| self.face.rot = rot)
     }
 
-    pub fn render(&self, render: Crop::View) -> Result<()> {
-        self.crop.view(&self.face, &render)
+    pub fn view(&self, view: Crop::View) -> Result<()> {
+        self.crop.view(&self.face, &view)
     }
 }
 

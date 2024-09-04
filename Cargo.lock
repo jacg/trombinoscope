@@ -3093,6 +3093,7 @@ dependencies = [
  "cli",
  "console",
  "face",
+ "image 0.25.2",
  "render",
  "show-image 0.14.0",
  "util",
