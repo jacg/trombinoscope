@@ -57,6 +57,7 @@
               buildInputs = [
                 pkgs.rust-tools
                 pkgs.cargo-nextest
+                pkgs.cargo-flamegraph
                 pkgs.bacon
                 pkgs.just
                 pkgs.pkg-config
