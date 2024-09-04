@@ -1,14 +1,17 @@
 use std::f32::consts::TAU;
 
-use face::face::FaceInImage;
 use macroquad::prelude::*;
 
 use util::find_jpgs_in_dir;
 
+use face::{
+    face::FaceInImage,
+    error as ferr,
+};
+
 const ASPECT_RATIO: f32 = 5.0 / 4.0;
 
 mod ui_skins_example;
-
 
 #[macroquad::main("Trombinoscope")]
 async fn main() {
@@ -33,8 +36,8 @@ async fn main() {
     let start = std::time::Instant::now();
     for jpg in find_jpgs_in_dir(&path).into_iter() {
         let texture = load_texture(&jpg.to_string_lossy()).await.unwrap();
-        let in_memory = MqImage { texture };
-        faces.push(FaceMq::new(jpg, in_memory).unwrap())
+        let crop = CropMq { texture };
+        faces.push(FaceMq::new(jpg, crop).unwrap())
     }
     println!("Loading of images took {:.0?}", start.elapsed());
 
@@ -68,7 +71,7 @@ async fn main() {
         for (n, face) in faces.iter().enumerate() {
             let row = n / 6;
             let col = n % 6;
-            face.render(RenderMq { col, row, col_w, row_h, color: if n == face_n { WHITE } else { GRAY }} );
+            face.render(ViewMq { col, row, col_w, row_h, color: if n == face_n { WHITE } else { GRAY }} );
         }
 
         //ui_example(&mut state);
@@ -78,16 +81,20 @@ async fn main() {
     println!("TODO implement: Saving images.")
 }
 
-type FaceMq = face::face::Face<MqImage>;
+type FaceMq = face::face::Face<CropMq>;
 
-struct MqImage {
-    texture: Texture2D,
+struct CropMq { texture: Texture2D }
+
+struct ViewMq {
+    col: usize,
+    row: usize,
+    col_w: f32,
+    row_h: f32,
+    color: Color,
 }
 
-use face::error as ferr;
-
-impl face::face::InMemoryImage for MqImage {
-    type Render = RenderMq;
+impl face::face::CropUi for CropMq {
+    type View = ViewMq;
     fn replace_image(&mut self, path: impl AsRef<std::path::Path>) -> face::error::Result<()> { todo!() }
     fn set_cx (&mut self, x: f32)  -> ferr::Result<f32> { Ok(x) }
     fn set_cy (&mut self, y: f32)  -> ferr::Result<f32> { Ok(y) }
@@ -96,10 +103,10 @@ impl face::face::InMemoryImage for MqImage {
     fn save  (&self)               -> ferr::Result<()>  { Err(ferr::Error::Todo) }
     fn full_w(&self)               -> ferr::Result<f32> { Ok(self.texture.size().x) }
     fn full_h(&self)               -> ferr::Result<f32> { Ok(self.texture.size().y) }
-    fn render(
+    fn view(
         &self,
         &FaceInImage { cx, cy, w, rot, .. }: &FaceInImage,
-        &Self::Render { col, row, col_w, row_h, color }: &Self::Render
+        &Self::View { col, row, col_w, row_h, color }: &Self::View
     ) -> face::error::Result<()> {
 
         let (full_w, full_h, rotate) = {
@@ -139,12 +146,4 @@ impl face::face::InMemoryImage for MqImage {
         Ok(())
     }
 
-}
-
-struct RenderMq {
-    col: usize,
-    row: usize,
-    col_w: f32,
-    row_h: f32,
-    color: Color,
 }
