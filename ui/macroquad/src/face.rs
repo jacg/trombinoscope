@@ -3,13 +3,13 @@ use std::f32::consts::TAU;
 use macroquad::prelude::*;
 
 use ::face::{
-    face::FaceInImage,
+    FaceInImage,
     error as ferr,
 };
 
 pub const ASPECT_RATIO: f32 = 5.0 / 4.0;
 
-pub (crate) type FaceMq = face::face::Face<CropMq>;
+pub (crate) type FaceMq = face::Face<CropMq>;
 
 pub (crate) struct CropMq { pub (crate) texture: Texture2D }
 
@@ -21,7 +21,7 @@ pub (crate) struct ViewMq {
     pub (crate) color: Color,
 }
 
-impl face::face::CropUi for CropMq {
+impl face::CropUi for CropMq {
     type View = ViewMq;
     fn replace_image(&mut self, path: impl AsRef<std::path::Path>) -> face::error::Result<()> { todo!() }
     fn set_cx (&mut self, x: f32)  -> ferr::Result<f32> { Ok(x) }

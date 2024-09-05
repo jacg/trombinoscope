@@ -8,7 +8,7 @@ use std::{
 use image::{DynamicImage, GenericImageView, codecs::jpeg::JpegEncoder};
 use img_parts::jpeg::{self, JpegSegment, Jpeg};
 
-use crate::face::FaceInImage;
+use crate::FaceInImage;
 
 #[derive(Debug)]
 pub struct Cropped {

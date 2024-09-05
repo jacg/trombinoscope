@@ -1,13 +1,13 @@
 use std::{path::Path, time::Instant};
 
 use face::{
-    face::FaceInImage,
+    FaceInImage,
     error as ferr,
 };
 use image::{DynamicImage, GenericImageView};
 use show_image::WindowProxy;
 
-pub (crate) type FaceSi<'a> = face::face::Face<CropSi<'a>>;
+pub (crate) type FaceSi<'a> = face::Face<CropSi<'a>>;
 
 pub (crate) struct CropSi<'w> {
     pub (crate) rot: i8,
@@ -18,7 +18,7 @@ pub (crate) struct CropSi<'w> {
 #[derive(Clone, Copy)]
 pub (crate) struct ViewSi {}
 
-impl face::face::CropUi for CropSi<'_> {
+impl face::CropUi for CropSi<'_> {
     type View = ViewSi;
 
     fn replace_image(&mut self, path: impl AsRef<Path>) -> ferr::Result<()> {
