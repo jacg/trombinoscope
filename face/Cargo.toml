@@ -7,4 +7,5 @@ edition = "2021"
 bitcode = "0.6.3"
 image = "0.25.1"
 img-parts = "0.3.0"
+thiserror = "1.0.63"
 util = { path = "../util" }

@@ -20,6 +20,9 @@
 //!   - `FaceInImage` describing where to find the face within the full image
 //!   - `CropUi` instance for the UI backend being used.
 
+mod metadata;
+pub use metadata::FaceInImage;
+
 pub mod error;
 pub mod old;
 
@@ -135,17 +138,4 @@ impl<Crop: CropUi> Face<Crop> {
     pub fn view(&self, view: Crop::View) -> Result<()> {
         self.crop.view(&self.face, &view)
     }
-}
-
-use bitcode::{Decode, Encode};
-
-/// The information needed to label and locate a face inside a photograph
-#[derive(Encode, Decode, PartialEq, Debug)]
-pub struct FaceInImage {
-    pub given: String,
-    pub family: String,
-    pub cx: f32,
-    pub cy: f32,
-    pub w: f32,
-    pub rot: i8,
 }
