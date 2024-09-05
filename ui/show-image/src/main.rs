@@ -2,25 +2,20 @@ use std::time::Instant;
 
 use show_image::{create_window, event};
 
-use util::Dirs;
-
+use util::{Dirs, find_jpgs_in_dir};
 mod face;
-
 use face::{CropSi, FaceSi, ViewSi};
 
 #[show_image::main]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = cli::parse();
-
     if cli.strip_metadata { util::strip_metadata(); }
     let window = create_window("image", Default::default())?;
-
     let dirs = Dirs::new(cli.class_dir);
 
     let start = Instant::now();
-    let mut faces = std::fs::read_dir(&dirs.photo)?
-        .filter_map(|x| x.ok())
-        .map(|p| p.path())
+
+    let mut faces = find_jpgs_in_dir(&dirs.photo).into_iter()
         .filter_map(|path| {
             image::open(&path)
                 .ok()
@@ -34,16 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .collect::<Vec<_>>();
     println!("Loading all images took {:.1?}", start.elapsed());
 
-    crop_interactively(&mut faces, &window, &dirs).unwrap();
-    save_and_regenerate(&faces, &dirs);
-    Ok(())
-}
 
-fn crop_interactively(
-    faces: &mut [FaceSi],
-    window: &show_image::WindowProxy,
-    dirs: &Dirs,
-) -> Result<(), Box<dyn std::error::Error>> {
     let mut face_n = 0;
     let view = ViewSi {  };
 
@@ -85,6 +71,8 @@ fn crop_interactively(
             }
         }
     }
+
+    save_and_regenerate(&faces, &dirs);
     Ok(())
 }
 

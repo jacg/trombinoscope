@@ -1,7 +1,6 @@
 use macroquad::prelude::*;
 
-use util::find_jpgs_in_dir;
-
+use util::{Dirs, find_jpgs_in_dir};
 mod face;
 use face::{ASPECT_RATIO, CropMq, FaceMq, ViewMq};
 
@@ -10,25 +9,26 @@ mod ui_skins_example;
 #[macroquad::main("Trombinoscope")]
 async fn main() {
 
-    use ui_skins_example::{skin1, skin2, Share};
-    let skin1 = skin1().await;
-    let skin2 = skin2().await;
-    #[allow(unused)]
-    let mut state =  Share {
-        default_skin: macroquad::ui::root_ui().default_skin().clone(),
-        skin1: skin1.clone(),
-        skin2: skin2.clone(),
-        checkbox: false,
-        combobox: 0,
-        text: "".into(),
-        number: 0.0,
-    };
+    // use ui_skins_example::{skin1, skin2, Share};
+    // let skin1 = skin1().await;
+    // let skin2 = skin2().await;
+    // #[allow(unused)]
+    // let mut state =  Share {
+    //     default_skin: macroquad::ui::root_ui().default_skin().clone(),
+    //     skin1: skin1.clone(),
+    //     skin2: skin2.clone(),
+    //     checkbox: false,
+    //     combobox: 0,
+    //     text: "".into(),
+    //     number: 0.0,
+    // };
 
-    let path = cli::parse().class_dir.join("Complet");
+    let cli = cli::parse();
+    let dirs = Dirs::new(cli.class_dir);
 
     let mut faces = vec![];
     let start = std::time::Instant::now();
-    for jpg in find_jpgs_in_dir(&path).into_iter() {
+    for jpg in find_jpgs_in_dir(&dirs.photo).into_iter() {
         let texture = load_texture(&jpg.to_string_lossy()).await.unwrap();
         let crop = CropMq { texture };
         faces.push(FaceMq::new(jpg, crop).unwrap())
