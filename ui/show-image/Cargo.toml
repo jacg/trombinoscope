@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 cli = { path = "../../cli" }
-console = "0.15.8"
 face = { path = "../../face" }
 image = "0.25.1"
 render = { path = "../../render" }

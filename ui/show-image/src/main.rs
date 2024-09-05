@@ -1,7 +1,4 @@
-use std::{
-    io::Write,
-    time::Instant
-};
+use std::time::Instant;
 
 use show_image::{create_window, event};
 
@@ -15,17 +12,7 @@ use face::{CropSi, FaceSi, ViewSi};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = cli::parse();
 
-    if cli.strip_metadata {
-        let mut stdout = console::Term::stdout();
-        stdout.write_all(b"\n\nARE YOU SURE THAT YOU WANT TO STRIP METADATA ?  This cannot be undone!
-To continue with stripped metadata, press '@'.
-Otherwise press any other key and rerun the program without the `--strip-metadata option`
-").unwrap();
-        if stdout.read_key().unwrap() != console::Key::Char('@') {
-            println!("\nNot stripping metadata. Stopping. Rerun without `--strip-metadata`.");
-            std::process::exit(0);
-        }
-    }
+    if cli.strip_metadata { util::strip_metadata(); }
     let window = create_window("image", Default::default())?;
 
     let dirs = Dirs::new(cli.class_dir);

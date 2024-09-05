@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+console = "0.15.8"
 
 [dev-dependencies]
 nextest = "0.0.0"

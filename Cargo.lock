@@ -1859,7 +1859,6 @@ name = "macroquad"
 version = "0.1.0"
 dependencies = [
  "cli",
- "console",
  "face",
  "image 0.25.2",
  "macroquad 0.4.13",
@@ -2281,7 +2280,6 @@ name = "old"
 version = "0.1.0"
 dependencies = [
  "cli",
- "console",
  "face",
  "image 0.25.2",
  "render",
@@ -3104,7 +3102,6 @@ name = "show-image"
 version = "0.1.0"
 dependencies = [
  "cli",
- "console",
  "face",
  "image 0.25.2",
  "render",
@@ -4010,6 +4007,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 name = "util"
 version = "0.1.0"
 dependencies = [
+ "console",
  "nextest",
  "pretty_assertions",
  "rstest",

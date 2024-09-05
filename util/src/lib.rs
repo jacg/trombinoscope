@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    io,
+    io::{self, Write},
     ffi::OsStr,
     path::{Path, PathBuf},
 };
@@ -125,5 +125,17 @@ mod tests {
         let (given, family) = filename_to_given_family(filename).unwrap();
         assert_eq!( given,  xgiven);
         assert_eq!(family, xfamily);
+    }
+}
+
+pub fn strip_metadata() {
+    let mut stdout = console::Term::stdout();
+    stdout.write_all(b"\n\nARE YOU SURE THAT YOU WANT TO STRIP METADATA ?  This cannot be undone!
+To continue with stripped metadata, press '@'.
+Otherwise press any other key and rerun the program without the `--strip-metadata option`
+").unwrap();
+    if stdout.read_key().unwrap() != console::Key::Char('@') {
+        println!("\nNot stripping metadata. Stopping. Rerun without `--strip-metadata`.");
+        std::process::exit(0);
     }
 }
