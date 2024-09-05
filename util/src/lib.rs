@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Extract name and surname from filename in format 'name @ surname.<extension>'
 pub fn filename_to_given_family(path: impl AsRef<Path>) -> Option<(String, String)> {
     let basename = path.as_ref().file_name()?;
     let stem: String = Path::new(basename).file_stem()?.to_str().map(Into::into)?;
@@ -15,6 +16,7 @@ pub fn filename_to_given_family(path: impl AsRef<Path>) -> Option<(String, Strin
     ))
 }
 
+/// Make sure given directory exists and is empty, deleting previous contents
 pub fn ensure_empty_dir(dir: impl AsRef<Path>) -> std::io::Result<()> {
     let dir = dbg!(dir.as_ref().as_os_str());
     std::process::Command::new("rm")   .arg("-rf").arg(dir).output()?;
@@ -22,6 +24,7 @@ pub fn ensure_empty_dir(dir: impl AsRef<Path>) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Use the underlying UNIX-like OS' `mv` command
 pub fn unix_mv(from: impl AsRef<Path>, to: impl AsRef<Path>) -> io::Result<()> {
     std::process::Command::new("mv")
         .arg(from.as_ref().as_os_str())
@@ -30,6 +33,7 @@ pub fn unix_mv(from: impl AsRef<Path>, to: impl AsRef<Path>) -> io::Result<()> {
     Ok(())
 }
 
+/// Use the underlying UNIX-like OS' `rm -rf` command
 pub fn unix_rm_rf(path: impl AsRef<Path>) -> io::Result<()> {
     std::process::Command::new("rm")
         .arg(path.as_ref().as_os_str())
@@ -38,6 +42,8 @@ pub fn unix_rm_rf(path: impl AsRef<Path>) -> io::Result<()> {
     Ok(())
 }
 
+/// Return a `Vec` of files in given directory, which have a filename extension
+/// implying the contents are a JPEG image.
 pub fn find_jpgs_in_dir(dir: impl AsRef<Path>) -> Vec<PathBuf> {
     std::fs::read_dir(dir)
         .unwrap()
@@ -46,6 +52,7 @@ pub fn find_jpgs_in_dir(dir: impl AsRef<Path>) -> Vec<PathBuf> {
         .collect()
 }
 
+/// Check whether the filename extension is one of jpg, jpeg, JPG or JPEG
 pub fn is_jpg(path: impl AsRef<Path>) -> bool {
     if let Some(ref extension) = path.as_ref().extension() {
         ["jpg", "jpeg", "JPG", "JPEG"]
@@ -79,6 +86,7 @@ impl Dirs {
     pub fn class_name(&self) -> String { class_from_dir(&self.class)  }
 }
 
+/// Deduce a class name from the given directory
 fn class_from_dir(dir: impl AsRef<Path>) -> String {
     let std::path::Component::Normal(class) = dir.as_ref().components().last().unwrap()
         else { panic!("Last component of `{dir}` cannot be interpreted as a class name", dir = dir.as_ref().display()) };
@@ -98,6 +106,8 @@ pub fn path_to_item(image_path: impl AsRef<Path>) -> Option<Item> {
     })
 }
 
+/// Relative ordering for names, giving precedence to family name over given
+/// name
 pub fn family_given(l: &Item, r: &Item) -> Ordering {
     use std::cmp::Ordering::*;
     let (Item { name: l, .. }, Item { name: r, .. }) = (l,r);

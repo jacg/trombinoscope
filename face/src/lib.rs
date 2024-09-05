@@ -1,7 +1,7 @@
 //! Abstractions for the identification and display of faces found in JPEG
 //! images, reusable across different UI backends.
 //!
-//! It contains three major components:
+//! The three major components are:
 //!
 //! + `struct FaceInImage`
 //!
