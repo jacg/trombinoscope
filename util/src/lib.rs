@@ -5,6 +5,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use img_parts::jpeg::Jpeg;
+
 /// Extract name and surname from filename in format 'name @ surname.<extension>'
 pub fn filename_to_given_family(path: impl AsRef<Path>) -> Option<(String, String)> {
     let basename = path.as_ref().file_name()?;
@@ -106,6 +108,24 @@ pub fn path_to_item(image_path: impl AsRef<Path>) -> Option<Item> {
     })
 }
 
+/// INCOMPLETE
+pub fn strip_metadata() {
+    let mut stdout = console::Term::stdout();
+    stdout.write_all(b"\n\nARE YOU SURE THAT YOU WANT TO STRIP METADATA ?  This cannot be undone!
+To continue with stripped metadata, press '@'.
+Otherwise press any other key and rerun the program without the `--strip-metadata option`
+").unwrap();
+    if stdout.read_key().unwrap() != console::Key::Char('@') {
+        println!("\nNot stripping metadata. Stopping. Rerun without `--strip-metadata`.");
+        std::process::exit(0);
+    }
+}
+
+
+pub fn read_jpeg(path: impl AsRef<Path>) -> Jpeg { bytes_to_jpeg(&std::fs::read(&path).unwrap()) }
+pub fn write_jpeg(jpeg: Jpeg, sink: &mut impl Write) { jpeg.encoder().write_to(sink).unwrap(); }
+pub fn bytes_to_jpeg(bytes: &[u8]) -> Jpeg { Jpeg::from_bytes(bytes.to_owned().into()).unwrap() }
+
 /// Relative ordering for names, giving precedence to family name over given
 /// name
 pub fn family_given(l: &Item, r: &Item) -> Ordering {
@@ -135,17 +155,5 @@ mod tests {
         let (given, family) = filename_to_given_family(filename).unwrap();
         assert_eq!( given,  xgiven);
         assert_eq!(family, xfamily);
-    }
-}
-
-pub fn strip_metadata() {
-    let mut stdout = console::Term::stdout();
-    stdout.write_all(b"\n\nARE YOU SURE THAT YOU WANT TO STRIP METADATA ?  This cannot be undone!
-To continue with stripped metadata, press '@'.
-Otherwise press any other key and rerun the program without the `--strip-metadata option`
-").unwrap();
-    if stdout.read_key().unwrap() != console::Key::Char('@') {
-        println!("\nNot stripping metadata. Stopping. Rerun without `--strip-metadata`.");
-        std::process::exit(0);
     }
 }

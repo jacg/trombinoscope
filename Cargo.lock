@@ -4008,6 +4008,8 @@ name = "util"
 version = "0.1.0"
 dependencies = [
  "console",
+ "image 0.25.2",
+ "img-parts",
  "nextest",
  "pretty_assertions",
  "rstest",

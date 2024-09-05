@@ -1,12 +1,13 @@
 use std::{
     fs::File,
-    io::Write,
     path::{Path, PathBuf},
     time::Instant,
 };
 
 use image::{DynamicImage, GenericImageView, codecs::jpeg::JpegEncoder};
-use img_parts::jpeg::{self, JpegSegment, Jpeg};
+use img_parts::jpeg::{self, JpegSegment};
+
+use util::{read_jpeg, write_jpeg};
 
 use crate::FaceInImage;
 
@@ -165,10 +166,6 @@ Try stripping out metadata by rerunning trombinoscope with the --strip-metadata 
     pub fn rot_l(&mut self) { self.set_rotation((self.rot - 1).rem_euclid(4)); }
     pub fn flip (&mut self) { self.set_rotation((self.rot + 2).rem_euclid(4)); }
 }
-
-fn read_jpeg(path: impl AsRef<Path>) -> Jpeg { bytes_to_jpeg(&std::fs::read(&path).unwrap()) }
-fn write_jpeg(jpeg: Jpeg, sink: &mut impl Write) { jpeg.encoder().write_to(sink).unwrap(); }
-fn bytes_to_jpeg(bytes: &[u8]) -> Jpeg { Jpeg::from_bytes(bytes.to_owned().into()).unwrap() }
 
 
 pub fn save_crop_metadata(faces: &[Cropped]) {
