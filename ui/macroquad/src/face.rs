@@ -7,8 +7,6 @@ use ::face::{
     error as ferr,
 };
 
-pub const ASPECT_RATIO: f32 = 5.0 / 4.0;
-
 pub (crate) type FaceMq = face::Face<CropMq>;
 
 pub (crate) struct CropMq { pub (crate) texture: Texture2D }
@@ -42,7 +40,7 @@ impl face::CropUi for CropMq {
             if x < y {(x, y, 0)} else {(y, x, 3)}
         } ;
 
-        let h = w * ASPECT_RATIO;
+        let h = w * face::ASPECT_RATIO;
         let x_ =          cx - w/2.;
         let xi = full_w - cx - w/2.;
         let y_ =          cy - h/2.;

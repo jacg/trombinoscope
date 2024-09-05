@@ -110,7 +110,7 @@ impl<Crop: CropUi> Face<Crop> {
 
     /// Create face using metadata found in image. If no metadata is present,
     /// use default metadata.
-    pub fn from_metadata(path: impl AsRef<Path>) -> Result<Self> {
+    pub fn from_metadata_in_jpeg(path: impl AsRef<Path>) -> Result<Self> {
         // let mut new = Self::new(&path, image);
         // let mut jpeg = read_jpeg(&path);
         // if strip_old_metadata { jpeg.remove_segments_by_marker(OUR_MARKER) }
@@ -139,3 +139,5 @@ impl<Crop: CropUi> Face<Crop> {
         self.crop.view(&self.face, &view)
     }
 }
+
+pub const ASPECT_RATIO: f32 = 5.0 / 4.0;

@@ -1,8 +1,10 @@
 use macroquad::prelude::*;
 
 use util::{Dirs, find_jpgs_in_dir};
+use ::face::ASPECT_RATIO;
+
 mod face;
-use face::{ASPECT_RATIO, CropMq, FaceMq, ViewMq};
+use face::{CropMq, FaceMq, ViewMq};
 
 mod ui_skins_example;
 

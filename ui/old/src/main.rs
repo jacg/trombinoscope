@@ -9,14 +9,16 @@ use util::{Dirs, ensure_empty_dir, find_jpgs_in_dir};
 #[show_image::main]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = cli::parse();
+    if cli.strip_metadata { panic!("--strip-metadata temporarily unavailable"); }
     if cli.strip_metadata { util::strip_metadata(); }
     let window = create_window("image", Default::default())?;
     let dirs = Dirs::new(cli.class_dir);
 
     let start = Instant::now();
 
+
     let mut faces = find_jpgs_in_dir(&dirs.photo).into_iter()
-        .filter_map(|path| Cropped::load(path, cli.strip_metadata))
+        .filter_map(|path| Cropped::load(path))
         .collect::<Vec<_>>();
     println!("Loading all images took {:.1?}", start.elapsed());
 
@@ -38,7 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             macro_rules! limit {
                 ($method:ident) => {
                     let face = &mut faces[face_n];
-                    face.$method(step_size);
+                    face.$method(step_size as f32);
                     window.set_image("label", face.get()).unwrap();
                 };
             }

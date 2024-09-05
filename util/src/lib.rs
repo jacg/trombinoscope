@@ -122,6 +122,7 @@ Otherwise press any other key and rerun the program without the `--strip-metadat
 }
 
 
+// TODO make read_jpeg return Result
 pub fn read_jpeg(path: impl AsRef<Path>) -> Jpeg { bytes_to_jpeg(&std::fs::read(&path).unwrap()) }
 pub fn write_jpeg(jpeg: Jpeg, sink: &mut impl Write) { jpeg.encoder().write_to(sink).unwrap(); }
 pub fn bytes_to_jpeg(bytes: &[u8]) -> Jpeg { Jpeg::from_bytes(bytes.to_owned().into()).unwrap() }
