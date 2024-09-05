@@ -2277,6 +2277,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "old"
+version = "0.1.0"
+dependencies = [
+ "cli",
+ "console",
+ "face",
+ "image 0.25.2",
+ "render",
+ "show-image 0.14.0",
+ "util",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
