@@ -15,7 +15,5 @@ pub trait Face {
     fn full_w(&self)                                    -> Result<f32>;
     fn full_h(&self)                                    -> Result<f32>;
     fn view(&self, face: &FaceType<Self>, view: &Self::View) -> Result<()> where Self: Sized;
-
-    fn save(&self)                                      -> Result<()>;
     fn as_bytes(&self, face: &FaceInImage) -> Vec<u8>;
 }

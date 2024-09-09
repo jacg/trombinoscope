@@ -70,8 +70,6 @@ impl face::ui::one::Face for SiFace {
         Ok(new_rot)
     }
 
-    fn save(&self) -> ferr::Result<()> { todo!() }
-
     fn view(
         &self,
         face: &SiFaceType,

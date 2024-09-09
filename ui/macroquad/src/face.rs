@@ -45,7 +45,6 @@ impl ui::one::Face for CropMq {
     fn set_cy (&mut self, y: f32)  -> ferr::Result<f32> { Ok(y) }
     fn set_w  (&mut self, w: f32)  -> ferr::Result<f32> { Ok(w) }
     fn set_rot(&mut self, rot: i8) -> ferr::Result<i8>  { Ok(rot) }
-    fn save  (&self)               -> ferr::Result<()>  { Err(ferr::Error::Todo) }
     fn full_w(&self)               -> ferr::Result<f32> { Ok(self.texture.size().x) }
     fn full_h(&self)               -> ferr::Result<f32> { Ok(self.texture.size().y) }
     fn view(
