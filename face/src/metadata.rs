@@ -34,7 +34,7 @@ impl FaceInImage {
     pub fn default_for(width: f32, height: f32) -> Self {
         let (h, w, rot) = {
             let (w, h) = (width, height);
-            if w < h {(w, h, 3)} else {(h, w, 0)}
+            if w < h {(w, h, 0)} else {(h, w, 3)}
         };
         Self {
             given: "TODO Prénom".into(),
