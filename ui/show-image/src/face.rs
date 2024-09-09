@@ -41,7 +41,7 @@ impl face::ui::one::Face for SiFace {
 
         let ui = Self {
             rot: face.rot,
-            rotated_image: Self::image_rotated_by(&image, face.rot),
+            rotated_image: image_rotated_by(&image, face.rot),
         };
 
         let path = path.as_ref().to_owned();
@@ -104,15 +104,13 @@ impl face::ui::one::Face for SiFace {
 
 }
 
-impl SiFace {
-    pub fn image_rotated_by(image: &DynamicImage, rot: i8) -> DynamicImage {
-        let rot = rot.rem_euclid(4);
-        match rot {
-            0 => image.clone(),
-            1 => image.rotate90(),
-            2 => image.rotate180(),
-            3 => image.rotate270(),
-            _ => unreachable!(),
-        }
+fn image_rotated_by(image: &DynamicImage, rot: i8) -> DynamicImage {
+    let rot = rot.rem_euclid(4);
+    match rot {
+        0 => image.clone(),
+        1 => image.rotate90(),
+        2 => image.rotate180(),
+        3 => image.rotate270(),
+        _ => unreachable!(),
     }
 }
