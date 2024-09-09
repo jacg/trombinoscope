@@ -17,6 +17,9 @@ pub enum Error{
     #[error("TODO OsString error description")]
     Abcd(OsString),
 
+    #[error("TODO io::Error description")]
+    XXX(#[from] std::io::Error),
+
     // TODO: this is probably too backend-specific to appear here
     #[error("Something went wrong in our use of `image`")]
     Image(#[from] image::ImageError),

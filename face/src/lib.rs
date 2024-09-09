@@ -25,16 +25,14 @@
 //!   + TODO add trait `UiGlobal` ?
 
 mod metadata;
-pub use metadata::FaceInImage;
-
 pub mod ui;
-
 pub mod error;
 pub mod old;
 
-use std::path::{Path, PathBuf};
+pub use metadata::{FaceInImage, save_face_metadata, write_many_face_images};
+pub use error::{Error, Result};
 
-use crate::error::Result;
+use std::path::{Path, PathBuf};
 
 /// A named face in a photograph.
 ///
@@ -67,15 +65,14 @@ macro_rules! meth_coordinated_with_face {
 impl<Ui: ui::one::Face> FaceType<Ui> {
 
     pub fn load(path: impl AsRef<Path>) -> Result<Self> { Ui::load(path) }
+    pub fn save_metadata(&self) -> Result<()> { self.face.embed_in_jpeg(&self.path) }
+    pub fn view(&self, view: &Ui::View) -> Result<()> { self.ui.view(self, view) }
 
     meth_coordinated_with_face!{move_right set_cx  cx  f32}
     meth_coordinated_with_face!{move_down  set_cy  cy  f32}
     meth_coordinated_with_face!{zoom_in    set_w   w   f32}
     meth_coordinated_with_face!{rotate     set_rot rot i8 }
 
-    pub fn view(&self, view: &Ui::View) -> Result<()> {
-        self.ui.view(self, view)
-    }
 }
 
 pub const ASPECT_RATIO: f32 = 5.0 / 4.0;

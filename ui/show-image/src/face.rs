@@ -92,10 +92,23 @@ impl face::ui::one::Face for SiFace {
     fn full_w(&self) -> ferr::Result<f32> { Ok(self.rotated_image.dimensions().0 as f32) }
     fn full_h(&self) -> ferr::Result<f32> { Ok(self.rotated_image.dimensions().1 as f32) }
 
+    fn as_bytes(&self, face@&FaceInImage { cx, cy, w, .. }: &FaceInImage) -> Vec<u8> {
+        let x = (cx - w / 2.0) as u32;
+        let y = (cy - w / 2.0) as u32;
+        let w =       w        as u32;
+        let h = face.h()       as u32;
+        self
+            .rotated_image
+            .crop_imm(x, y, w, h)
+            .as_bytes()
+            .to_owned()
+    }
+
 }
 
 impl SiFace {
     pub fn image_rotated_by(image: &DynamicImage, rot: i8) -> DynamicImage {
+        let rot = rot.rem_euclid(4);
         match rot {
             0 => image.clone(),
             1 => image.rotate90(),

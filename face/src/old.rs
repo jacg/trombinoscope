@@ -8,9 +8,7 @@ use image::{DynamicImage, GenericImageView, codecs::jpeg::JpegEncoder};
 
 use util::read_jpeg;
 
-use crate::{
-    error::Result, FaceInImage
-};
+use crate::{Result, FaceInImage};
 
 
 #[derive(Debug)]

@@ -2,7 +2,10 @@ use std::time::Instant;
 
 use show_image::{create_window, event};
 
-use util::{Dirs, find_jpgs_in_dir};
+use util::{Dirs, ensure_empty_dir, find_jpgs_in_dir};
+use render::trombinoscope;
+use ::face::{save_face_metadata, write_many_face_images};
+
 mod face;
 use face::{SiFaceType, SiFace, ViewSi};
 
@@ -49,9 +52,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     P     => { face.zoom_in   (-step_size).is_ok() }
                     R     => { face.rotate    ( 1        ).is_ok() }
                     L     => { face.rotate    (-1        ).is_ok() }
-                    // S     =>  { save_and_regenerate(faces, dirs) }
-                    Back  =>  { face_n = face_n.saturating_sub(1);             true }
-                    Space =>  { face_n = (face_n + 1).clamp(0, faces.len()-1); true }
+                    S     => { save_and_regenerate(&faces, &dirs).unwrap(); false }
+                    Back  => { face_n = face_n.saturating_sub(1);             true }
+                    Space => { face_n = (face_n + 1).clamp(0, faces.len()-1); true }
                     _ => { false}
                 };
                 if changed { faces[face_n].view(&view).unwrap(); }
@@ -59,15 +62,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    save_and_regenerate(&faces, &dirs);
+    save_and_regenerate(&faces, &dirs)?;
     Ok(())
 }
 
-fn save_and_regenerate(faces: &[SiFaceType], dirs: &Dirs) {
-    todo!()
-    // save_crop_metadata(faces);
-    // ensure_empty_dir(&dirs.work).unwrap();
-    // ensure_empty_dir(&dirs.render).unwrap();
-    // write_cropped_images(faces, &dirs.work);
-    // trombinoscope(dirs);
+fn save_and_regenerate(faces: &[SiFaceType], dirs: &Dirs) -> ::face::Result<()> {
+    save_face_metadata(faces)?;
+    ensure_empty_dir(&dirs.work)?;
+    ensure_empty_dir(&dirs.render)?;
+    write_many_face_images(faces, &dirs.work)?;
+    trombinoscope(dirs);
+    Ok(())
 }

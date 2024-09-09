@@ -40,7 +40,7 @@ impl ui::one::Face for CropMq {
 
     }
 
-    fn replace_image(&mut self, path: impl AsRef<std::path::Path>) -> face::error::Result<()> { todo!() }
+    fn replace_image(&mut self, path: impl AsRef<std::path::Path>) -> face::Result<()> { todo!() }
     fn set_cx (&mut self, x: f32)  -> ferr::Result<f32> { Ok(x) }
     fn set_cy (&mut self, y: f32)  -> ferr::Result<f32> { Ok(y) }
     fn set_w  (&mut self, w: f32)  -> ferr::Result<f32> { Ok(w) }
@@ -52,7 +52,7 @@ impl ui::one::Face for CropMq {
         &self,
         face: &FaceMq,
         &Self::View { col, row, col_w, row_h, color }: &Self::View
-    ) -> face::error::Result<()> {
+    ) -> face::Result<()> {
 
         let &FaceInImage { cx, cy, w, rot, .. } = &face.face;
 
@@ -91,6 +91,10 @@ impl ui::one::Face for CropMq {
             }
         );
         Ok(())
+    }
+
+    fn as_bytes(&self, face: &FaceInImage) -> Vec<u8> {
+        todo!()
     }
 
 }

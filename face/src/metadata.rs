@@ -1,14 +1,20 @@
 use std::{
     fs::File,
     path::Path,
+    time::Instant,
 };
 
 use bitcode::{Decode, Encode};
 use img_parts::jpeg::{self, Jpeg, JpegSegment};
+use image::codecs::jpeg::JpegEncoder;
 
 use util::{read_jpeg, write_jpeg};
 
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    ui,
+    FaceType, ASPECT_RATIO,
+};
 
 /// The information needed to label and locate a face inside a photograph
 #[derive(Encode, Decode, PartialEq, Debug)]
@@ -105,8 +111,49 @@ impl FaceInImage {
         todo!()
     }
 
+    pub fn h(&self) -> f32 { self.w * ASPECT_RATIO }
 }
 
+
+// TODO replace this with dynamic polymorphism
+/// Store the location and name of the face in the JPEG segment of the image
+/// containing the face
+pub fn save_face_metadata<Ui: ui::one::Face>(faces: &[FaceType<Ui>]) -> Result<()> {
+    let start_all = Instant::now();
+    for face in faces {
+        let start = Instant::now();
+        face.save_metadata()?;
+        println!("Embedded metadata in {} in {:.0?}",
+                 face.path.display(),
+                 start.elapsed(),
+        );
+    }
+    println!("Saving metadata took {:.0?}", start_all.elapsed());
+    Ok(())
+}
+
+// TODO dynamic polymorphism for faces
+/// Save each cropped face in its own image file in `dir`. Assumes `dir` exists.
+pub fn write_many_face_images<Ui: ui::one::Face>(faces: &[FaceType<Ui>], dir: impl AsRef<Path>) -> Result<()> {
+    for face in faces { write_one_face_image(face, &dir)?; }
+    Ok(())
+}
+
+/// Save one cropped face in its own image file in `dir`. Assumes `dir` exists.
+fn write_one_face_image<Ui: ui::one::Face>(FaceType { face, ui, .. }: &FaceType<Ui>, dir: impl AsRef<Path>) -> Result<()> {
+    let filename = format!("{} @ {}.jpg", dbg!(&face.given), dbg!(&face.family));
+    //let filename = face.path.file_name().unwrap().to_string_lossy();
+    let path = dir.as_ref().join(&*filename);
+    let file = &mut File::create(path)?;
+    let mut encoder = JpegEncoder::new(file);
+    encoder.encode(
+        &ui.as_bytes(face),
+        face.w as u32,
+        face.h() as u32,
+        image::ExtendedColorType::Rgb8
+    ).unwrap();
+    Ok(())
+}
 
 
 pub const OUR_MARKER: u8 = jpeg::markers::APP14;
