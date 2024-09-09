@@ -12,7 +12,6 @@ pub (crate) type SiFaceType = face::FaceType<SiFace>;
 #[derive(Debug)]
 pub (crate) struct SiFace {
     pub (crate) rot: i8,
-    pub (crate) image: DynamicImage,
     pub (crate) rotated_image: DynamicImage,
 }
 
@@ -43,7 +42,6 @@ impl face::ui::one::Face for SiFace {
         let ui = Self {
             rot: face.rot,
             rotated_image: Self::image_rotated_by(&image, face.rot),
-            image,
         };
 
         let path = path.as_ref().to_owned();
