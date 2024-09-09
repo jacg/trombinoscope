@@ -54,8 +54,8 @@ pub struct FaceType<Ui: ui::one::Face> {
 }
 
 macro_rules! meth_coordinated_with_face {
-    ($outer_meth:ident $inner_meth:ident $attr:ident) => {
-        pub fn $outer_meth(&mut self, delta: f32) -> Result<f32> {
+    ($outer_meth:ident $inner_meth:ident $attr:ident $type:ty) => {
+        pub fn $outer_meth(&mut self, delta: $type) -> Result<$type> {
             self.
                 ui
                 .$inner_meth(self.face.$attr - delta)
@@ -68,17 +68,10 @@ impl<Ui: ui::one::Face> FaceType<Ui> {
 
     pub fn load(path: impl AsRef<Path>) -> Result<Self> { Ui::load(path) }
 
-    meth_coordinated_with_face!{move_right set_cx cx}
-    meth_coordinated_with_face!{move_down  set_cy cy}
-    meth_coordinated_with_face!{zoom_in    set_w  w }
-
-    pub fn rotate(&mut self, rot: i8) -> Result<i8> {
-        let rot = (self.face.rot + rot).rem_euclid(4);
-        self
-            .ui
-            .set_rot(rot)
-            .inspect(|_| self.face.rot = rot)
-    }
+    meth_coordinated_with_face!{move_right set_cx  cx  f32}
+    meth_coordinated_with_face!{move_down  set_cy  cy  f32}
+    meth_coordinated_with_face!{zoom_in    set_w   w   f32}
+    meth_coordinated_with_face!{rotate     set_rot rot i8 }
 
     pub fn view(&self, view: &Ui::View) -> Result<()> {
         self.ui.view(self, view)
