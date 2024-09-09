@@ -4,7 +4,7 @@ use show_image::{create_window, event};
 
 use util::{Dirs, ensure_empty_dir, find_jpgs_in_dir};
 use render::trombinoscope;
-use ::face::{save_face_metadata, write_many_face_images};
+use ::face::{save_many_face_metadata, write_many_face_images};
 
 mod face;
 use face::{SiFaceType, SiFace, ViewSi};
@@ -67,7 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn save_and_regenerate(faces: &[SiFaceType], dirs: &Dirs) -> ::face::Result<()> {
-    save_face_metadata(faces)?;
+    save_many_face_metadata(faces)?;
     ensure_empty_dir(&dirs.work)?;
     ensure_empty_dir(&dirs.render)?;
     write_many_face_images(faces, &dirs.work)?;
