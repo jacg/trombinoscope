@@ -46,6 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let Some(code) = event.input.key_code {
                 let changed = match code {
                     Escape if event.input.state.is_pressed() => { break },
+                    Q      if modifiers.contains(MS::CTRL)   => { break },
                     Down  => { face.move_down ( step_size).is_ok() }
                     Up    => { face.move_down (-step_size).is_ok() }
                     Right => { face.move_right( step_size).is_ok() }
