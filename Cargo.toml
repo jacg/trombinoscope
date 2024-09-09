@@ -5,7 +5,6 @@ members = [
         "face",
         "render",
         "ui/macroquad",
-        "ui/old",
         "ui/show-image",
         "util",
 ]

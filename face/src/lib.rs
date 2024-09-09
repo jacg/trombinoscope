@@ -28,9 +28,6 @@ mod metadata;
 pub mod ui;
 pub mod error;
 
-
-pub mod old;
-
 pub use metadata::{FaceInImage, save_many_face_metadata, write_many_face_images};
 pub use error::{Error, Result};
 
