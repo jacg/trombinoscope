@@ -24,7 +24,7 @@
 //!
 //!   + TODO add trait `UiGlobal` ?
 
-mod metadata;
+pub mod metadata;
 pub mod ui;
 pub mod error;
 

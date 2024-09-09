@@ -108,20 +108,6 @@ pub fn path_to_item(image_path: impl AsRef<Path>) -> Option<Item> {
     })
 }
 
-/// INCOMPLETE
-pub fn strip_metadata() {
-    let mut stdout = console::Term::stdout();
-    stdout.write_all(b"\n\nARE YOU SURE THAT YOU WANT TO STRIP METADATA ?  This cannot be undone!
-To continue with stripped metadata, press '@'.
-Otherwise press any other key and rerun the program without the `--strip-metadata option`
-").unwrap();
-    if stdout.read_key().unwrap() != console::Key::Char('@') {
-        println!("\nNot stripping metadata. Stopping. Rerun without `--strip-metadata`.");
-        std::process::exit(0);
-    }
-}
-
-
 // TODO make read_jpeg return Result
 pub fn read_jpeg(path: impl AsRef<Path>) -> Jpeg { bytes_to_jpeg(&std::fs::read(&path).unwrap()) }
 pub fn write_jpeg(jpeg: Jpeg, sink: &mut impl Write) { jpeg.encoder().write_to(sink).unwrap(); }

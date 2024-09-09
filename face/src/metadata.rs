@@ -1,7 +1,7 @@
 use std::{
     fs::File,
+    io::Write,
     path::Path,
-    time::Instant,
 };
 
 use bitcode::{Decode, Encode};
@@ -107,8 +107,9 @@ impl FaceInImage {
     pub fn strip_from_jpeg(path: impl AsRef<Path>) -> Result<()> {
         let mut jpeg = read_jpeg(&path); // TODO make read_jpeg return Result
         jpeg.remove_segments_by_marker(OUR_MARKER);
-        //write_jpeg(jpeg, sink);
-        todo!()
+        let file = &mut File::create(path).unwrap();
+        write_jpeg(jpeg, file);
+        Ok(())
     }
 
     pub fn h(&self) -> f32 { self.w * ASPECT_RATIO }
@@ -146,6 +147,25 @@ fn write_one_face_image<Ui: ui::one::Face>(FaceType { face, ui, .. }: &FaceType<
     Ok(())
 }
 
+
+/// INCOMPLETE
+pub fn strip_from_jpgs_in_dir(dir: impl AsRef<Path>) -> Result<()> {
+    let mut stdout = console::Term::stdout();
+    stdout.write_all(b"\n\nARE YOU SURE THAT YOU WANT TO STRIP METADATA ?  This cannot be undone!
+To continue with stripped metadata, press '@'.
+Otherwise press any other key and rerun the program without the `--strip-metadata option`
+").unwrap();
+    if stdout.read_key().unwrap() != console::Key::Char('@') {
+        println!("\nNot stripping metadata. Stopping. Rerun without `--strip-metadata`.");
+        std::process::exit(0);
+    } else {
+        println!("STRIPPING METADATA");
+        for jpg in util::find_jpgs_in_dir(dir) {
+            FaceInImage::strip_from_jpeg(jpg)?;
+        }
+    }
+    Ok(())
+}
 
 pub const OUR_MARKER: u8 = jpeg::markers::APP14;
 pub const OUR_LABEL: &str = "trombinoscope";

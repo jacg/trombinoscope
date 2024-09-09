@@ -4,7 +4,10 @@ use show_image::{create_window, event};
 
 use util::{Dirs, ensure_empty_dir, find_jpgs_in_dir};
 use render::trombinoscope;
-use ::face::{save_many_face_metadata, write_many_face_images};
+use ::face::{
+    save_many_face_metadata, write_many_face_images,
+    metadata::strip_from_jpgs_in_dir,
+};
 
 mod face;
 use face::{SiFaceType, SiFace, ViewSi};
@@ -12,9 +15,8 @@ use face::{SiFaceType, SiFace, ViewSi};
 #[show_image::main]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = cli::parse();
-    // TODO cli.strip_metadata
-    if cli.strip_metadata { util::strip_metadata(); }
     let dirs = Dirs::new(cli.class_dir);
+    if cli.strip_metadata { strip_from_jpgs_in_dir(&dirs.photo)?; }
 
     let start = Instant::now();
     let mut faces = find_jpgs_in_dir(&dirs.photo).into_iter()
