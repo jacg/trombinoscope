@@ -26,7 +26,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     show!();
 
     for event in window.event_channel()? {
-        let start = std::time::Instant::now();
         //println!("{:#?}", event);
         if let event::WindowEvent::KeyboardInput(ref event) = event {
             use event::VirtualKeyCode::*;
@@ -64,7 +63,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        println!("{:.0?} {event:?}", start.elapsed());
     }
 
     save_and_regenerate(&faces, &dirs);

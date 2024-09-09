@@ -21,14 +21,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut face_n = 0;
     let view = ViewSi { window: create_window("image", Default::default())? };
-
-    macro_rules! show { () => { faces[face_n].view(&view).unwrap() }; }
-    show!();
+    faces[face_n].view(&view).unwrap();
 
     for event in view.window.event_channel()? {
-        let start = std::time::Instant::now();
         let face = &mut faces[face_n];
-        face.view(&view).unwrap();
         //println!("{:#?}", event);
         if let event::WindowEvent::KeyboardInput(ref event) = event {
             use event::VirtualKeyCode::*;
@@ -43,24 +39,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let step_size = step_size as f32;
 
             if let Some(code) = event.input.key_code {
-                match code {
-                    Escape => if event.input.state.is_pressed() { break },
-                    Down  => { let _ = face.move_down ( step_size); }
-                    Up    => { let _ = face.move_down (-step_size); }
-                    Right => { let _ = face.move_right( step_size); }
-                    Left  => { let _ = face.move_right(-step_size); }
-                    G     => { let _ = face.zoom_in   ( step_size); }
-                    P     => { let _ = face.zoom_in   (-step_size); }
-                    R     => { let _ = face.rotate    ( 1        ); }
-                    L     => { let _ = face.rotate    (-1        ); }
+                let changed = match code {
+                    Escape if event.input.state.is_pressed() => { break },
+                    Down  => { face.move_down ( step_size).is_ok() }
+                    Up    => { face.move_down (-step_size).is_ok() }
+                    Right => { face.move_right( step_size).is_ok() }
+                    Left  => { face.move_right(-step_size).is_ok() }
+                    G     => { face.zoom_in   ( step_size).is_ok() }
+                    P     => { face.zoom_in   (-step_size).is_ok() }
+                    R     => { face.rotate    ( 1        ).is_ok() }
+                    L     => { face.rotate    (-1        ).is_ok() }
                     // S     =>  { save_and_regenerate(faces, dirs) }
-                    Back  =>  { face_n = face_n.saturating_sub(1);             show!(); }
-                    Space =>  { face_n = (face_n + 1).clamp(0, faces.len()-1); show!(); }
-                    _ => {}
-                }
-            }
+                    Back  =>  { face_n = face_n.saturating_sub(1);             true }
+                    Space =>  { face_n = (face_n + 1).clamp(0, faces.len()-1); true }
+                    _ => { false}
+                };
+                if changed { faces[face_n].view(&view).unwrap(); }
+            };
         }
-        println!("{:.0?} {event:?}", start.elapsed());
     }
 
     save_and_regenerate(&faces, &dirs);
