@@ -7,20 +7,50 @@ use face::{
 use image::{DynamicImage, GenericImageView};
 use show_image::WindowProxy;
 
-pub (crate) type FaceSi<'a> = face::Face<CropSi<'a>>;
+pub (crate) type SiFaceType = face::FaceType<SiFace>;
 
-pub (crate) struct CropSi<'w> {
+#[derive(Debug)]
+pub (crate) struct SiFace {
     pub (crate) rot: i8,
+    pub (crate) image: DynamicImage,
     pub (crate) rotated_image: DynamicImage,
-    pub (crate) window: &'w WindowProxy,
 }
 
-#[derive(Clone, Copy)]
-pub (crate) struct ViewSi {}
+#[derive(Clone)]
+pub (crate) struct ViewSi {
+    pub window: WindowProxy
+}
 
-impl face::CropUi for CropSi<'_> {
+impl face::ui::one::Face for SiFace {
     type View = ViewSi;
 
+    fn load(path: impl AsRef<Path>) -> ferr::Result<SiFaceType>
+    where
+        Self: Sized,
+    {
+        let start = std::time::Instant::now();
+        let image = image::open(&path)?;
+        let elapsed_image = start.elapsed();
+
+        let start = std::time::Instant::now();
+        let face = FaceInImage::from_path_or_default_for(&path, image.width() as f32, image.height() as f32)?;
+        let elapsed_metadata = start.elapsed();
+
+        println!("Loaded {path} in {elapsed_image:.0?} + {elapsed_metadata:.0?}",
+                 path = path.as_ref().display()
+        );
+
+        let ui = Self {
+            rot: face.rot,
+            rotated_image: Self::image_rotated_by(&image, face.rot),
+            image,
+        };
+
+        let path = path.as_ref().to_owned();
+        ferr::Result::Ok(SiFaceType { path, face, ui })
+    }
+
+    // For non-blocking loading with preview
     fn replace_image(&mut self, path: impl AsRef<Path>) -> ferr::Result<()> {
         todo!()
     }
@@ -46,19 +76,32 @@ impl face::CropUi for CropSi<'_> {
 
     fn view(
         &self,
-        face: &FaceInImage,
-        _: &Self::View
+        face: &SiFaceType,
+        view: &Self::View
     ) -> ferr::Result<()> {
-        let &FaceInImage { cx, cy, w, ..  } = face;
+        let FaceInImage { cx, cy, w, ..  } = face.face;
         let x = (cx - w / 2.0) as u32;
         let y = (cy - w / 2.0) as u32;
         let width = w as u32;
         let height = w as u32 * 5 / 4; // TODO replace magic number with ASPECT_RATIO
         let cropped = self.rotated_image.crop_imm(x, y, width, height);
-        self.window.set_image("TODO label", cropped);
+        view.window.set_image("TODO label", cropped).unwrap();
         Ok(())
     }
 
     fn full_w(&self) -> ferr::Result<f32> { Ok(self.rotated_image.dimensions().0 as f32) }
     fn full_h(&self) -> ferr::Result<f32> { Ok(self.rotated_image.dimensions().1 as f32) }
+
+}
+
+impl SiFace {
+    pub fn image_rotated_by(image: &DynamicImage, rot: i8) -> DynamicImage {
+        match rot {
+            0 => image.clone(),
+            1 => image.rotate90(),
+            2 => image.rotate180(),
+            3 => image.rotate270(),
+            _ => unreachable!(),
+        }
+    }
 }

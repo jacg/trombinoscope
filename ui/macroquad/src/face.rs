@@ -5,9 +5,10 @@ use macroquad::prelude::*;
 use ::face::{
     FaceInImage,
     error as ferr,
+    ui,
 };
 
-pub (crate) type FaceMq = face::Face<CropMq>;
+pub (crate) type FaceMq = face::FaceType<CropMq>;
 
 pub (crate) struct CropMq { pub (crate) texture: Texture2D }
 
@@ -19,8 +20,26 @@ pub (crate) struct ViewMq {
     pub (crate) color: Color,
 }
 
-impl face::CropUi for CropMq {
+impl ui::one::Face for CropMq {
     type View = ViewMq;
+    fn load(path: impl AsRef<std::path::Path>) -> ferr::Result<FaceMq>
+    where
+        Self: Sized,
+    {
+        let start = std::time::Instant::now();
+        let image: Texture2D = todo!("Need to deal with macroquad async"); //load_texture(&path.as_ref().to_string_lossy()).map_err(|x| todo!())?;
+        let elapsed_image = start.elapsed();
+
+        let start = std::time::Instant::now();
+        let face = FaceInImage::from_path_or_default_for(&path, image.width() as f32, image.height() as f32)?;
+        let elapsed_metadata = start.elapsed();
+
+        println!("Loaded {path} in {elapsed_image:.0?} + {elapsed_metadata:.0?}",
+                 path = path.as_ref().display()
+        );
+
+    }
+
     fn replace_image(&mut self, path: impl AsRef<std::path::Path>) -> face::error::Result<()> { todo!() }
     fn set_cx (&mut self, x: f32)  -> ferr::Result<f32> { Ok(x) }
     fn set_cy (&mut self, y: f32)  -> ferr::Result<f32> { Ok(y) }
@@ -31,9 +50,11 @@ impl face::CropUi for CropMq {
     fn full_h(&self)               -> ferr::Result<f32> { Ok(self.texture.size().y) }
     fn view(
         &self,
-        &FaceInImage { cx, cy, w, rot, .. }: &FaceInImage,
+        face: &FaceMq,
         &Self::View { col, row, col_w, row_h, color }: &Self::View
     ) -> face::error::Result<()> {
+
+        let &FaceInImage { cx, cy, w, rot, .. } = &face.face;
 
         let (full_w, full_h, rotate) = {
             let Vec2 { x, y } = self.texture.size();

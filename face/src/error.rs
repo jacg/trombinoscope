@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{ffi::OsString, path::PathBuf};
 
 use thiserror::Error;
 
@@ -11,6 +11,13 @@ pub enum Error{
     #[error("Something went wrong in our use of `bitcode`. Old metadata version? If so, strip")]
     Bitcode(#[from] bitcode::Error),
 
+    #[error("Could not find basename in {0}")]
+    NoBaseName(PathBuf),
+
+    #[error("TODO OsString error description")]
+    Abcd(OsString),
+
+    // TODO: this is probably too backend-specific to appear here
     #[error("Something went wrong in our use of `image`")]
     Image(#[from] image::ImageError),
 

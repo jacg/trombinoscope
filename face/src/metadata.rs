@@ -4,7 +4,6 @@ use std::{
 };
 
 use bitcode::{Decode, Encode};
-use image::{DynamicImage, GenericImageView};
 use img_parts::jpeg::{self, Jpeg, JpegSegment};
 
 use util::{read_jpeg, write_jpeg};
@@ -24,20 +23,29 @@ pub struct FaceInImage {
 
 impl FaceInImage {
 
-    /// Construct default guess of face description for `image`
-    pub fn default_for_image(image: &DynamicImage) -> Self {
+    /// Construct default guess of face description for image with given width
+    /// and height
+    pub fn default_for(width: f32, height: f32) -> Self {
         let (h, w, rot) = {
-            let (w, h) = image.dimensions();
+            let (w, h) = (width, height);
             if w < h {(w, h, 3)} else {(h, w, 0)}
         };
         Self {
             given: "TODO Prénom".into(),
             family: "TODO Nom".into(),
-            cx: w as f32 / 3.0,
-            cy: h as f32 / 4.0,
-            w:  w as f32 / 8.0,
+            cx: w / 3.0,
+            cy: h / 4.0,
+            w:  w / 8.0,
             rot,
         }
+    }
+
+    pub fn from_path_or_default_for(path: impl AsRef<Path>, width: f32, height: f32) -> Result<Self> {
+        Ok(match FaceInImage::from_jpeg_in_file(&path) {
+            Ok(face) => face,
+            Err(Error::NoMetadataFound(_)) => FaceInImage::default_for(width, height),
+            err => err?,
+        })
     }
 
     pub fn from_jpeg_with_message(jpeg: &Jpeg, msg: &str) -> Result<Self> {

@@ -32,8 +32,7 @@ async fn main() {
     let start = std::time::Instant::now();
     for jpg in find_jpgs_in_dir(&dirs.photo).into_iter() {
         let texture = load_texture(&jpg.to_string_lossy()).await.unwrap();
-        let crop = CropMq { texture };
-        faces.push(FaceMq::new(jpg, crop).unwrap())
+        faces.push(FaceMq::load(jpg).unwrap())
     }
     println!("Loading of images took {:.0?}", start.elapsed());
 
@@ -67,7 +66,7 @@ async fn main() {
         for (n, face) in faces.iter().enumerate() {
             let row = n / 6;
             let col = n % 6;
-            face.view(ViewMq { col, row, col_w, row_h, color: if n == face_n { WHITE } else { GRAY }} );
+            face.view(&ViewMq { col, row, col_w, row_h, color: if n == face_n { WHITE } else { GRAY }} );
         }
 
         //ui_example(&mut state);

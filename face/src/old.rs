@@ -9,7 +9,7 @@ use image::{DynamicImage, GenericImageView, codecs::jpeg::JpegEncoder};
 use util::read_jpeg;
 
 use crate::{
-    error::{Error, Result}, metadata::{self, OUR_MARKER}, FaceInImage
+    error::Result, FaceInImage
 };
 
 
@@ -28,7 +28,7 @@ impl Cropped {
         let metadata = FaceInImage {
             given,
             family,
-            ..FaceInImage::default_for_image(&image)
+            ..FaceInImage::default_for(image.width() as f32, image.height() as f32)
         };
         Self {
             path: path.as_ref().into(),
@@ -62,7 +62,7 @@ impl Cropped {
 
 
         let start = Instant::now();
-        let mut jpeg = read_jpeg(&path);
+        let jpeg = read_jpeg(&path);
         let elapsed2 = start.elapsed();
         println!("Loaded {path} in {elapsed1:.0?} + {elapsed2:.0?}",
                  path = path.as_ref().display());
@@ -88,7 +88,7 @@ impl Cropped {
 
     pub fn get(&self) -> DynamicImage {
         let FaceInImage { cx: x, cy: y, w, .. } = self.metadata;
-        let h = self.h() as f32;
+        let h = self.h();
         self.rotated_cache.crop_imm(
             (x-w/2.0) as u32,
             (y-h/2.0) as u32,
@@ -137,7 +137,7 @@ pub fn save_crop_metadata(faces: &[Cropped]) {
     let start_all = Instant::now();
     for face in faces {
         let start = Instant::now();
-        face.save_metadata();
+        face.save_metadata().unwrap();
         println!("Embedded metadata in {} in {:.0?}",
                  face.path.display(),
                  start.elapsed(),

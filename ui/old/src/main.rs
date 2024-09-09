@@ -11,23 +11,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = cli::parse();
     if cli.strip_metadata { panic!("--strip-metadata temporarily unavailable"); }
     if cli.strip_metadata { util::strip_metadata(); }
-    let window = create_window("image", Default::default())?;
     let dirs = Dirs::new(cli.class_dir);
 
     let start = Instant::now();
-
-
     let mut faces = find_jpgs_in_dir(&dirs.photo).into_iter()
-        .filter_map(|path| Cropped::load(path))
+        .filter_map(Cropped::load)
         .collect::<Vec<_>>();
     println!("Loading all images took {:.1?}", start.elapsed());
 
     let mut face_n = 0;
+    let window = create_window("image", Default::default())?;
+
     macro_rules! show { () => { window.set_image("label", faces[face_n].get()).unwrap(); }; }
     show!();
+
     for event in window.event_channel()? {
+        let start = std::time::Instant::now();
         //println!("{:#?}", event);
-        if let event::WindowEvent::KeyboardInput(event) = event {
+        if let event::WindowEvent::KeyboardInput(ref event) = event {
             use event::VirtualKeyCode::*;
             use show_image::event::KeyboardInput  as KI;
             use show_image::event::ModifiersState as MS;
@@ -63,6 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
+        println!("{:.0?} {event:?}", start.elapsed());
     }
 
     save_and_regenerate(&faces, &dirs);
