@@ -132,9 +132,9 @@ pub fn write_many_face_images<Ui: ui::one::Face>(faces: &[FaceType<Ui>], dir: im
 }
 
 /// Save one cropped face in its own image file in `dir`. Assumes `dir` exists.
-fn write_one_face_image<Ui: ui::one::Face>(FaceType { face, ui, .. }: &FaceType<Ui>, dir: impl AsRef<Path>) -> Result<()> {
-    let filename = format!("{} @ {}.jpg", &face.given, &face.family);
-    //let filename = face.path.file_name().unwrap().to_string_lossy();
+fn write_one_face_image<Ui: ui::one::Face>(FaceType { face, ui, path }: &FaceType<Ui>, dir: impl AsRef<Path>) -> Result<()> {
+    // let filename = format!("{} @ {}.jpg", &face.given, &face.family);
+    let filename = path.file_name().unwrap().to_string_lossy();
     let path = dir.as_ref().join(&*filename);
     let file = &mut File::create(path)?;
     let mut encoder = JpegEncoder::new(file);
