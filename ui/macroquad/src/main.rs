@@ -1,7 +1,7 @@
 use macroquad::prelude::*;
 
 use util::{Dirs, find_jpgs_in_dir};
-use ::face::ASPECT_RATIO;
+use ::face::{metadata::{save_and_regenerate, strip_from_jpgs_in_dir}, ASPECT_RATIO};
 
 mod face;
 use face::{CropMq, FaceMq, ViewMq};
@@ -9,7 +9,7 @@ use face::{CropMq, FaceMq, ViewMq};
 mod ui_skins_example;
 
 #[macroquad::main("Trombinoscope")]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // use ui_skins_example::{skin1, skin2, Share};
     // let skin1 = skin1().await;
@@ -27,6 +27,7 @@ async fn main() {
 
     let cli = cli::parse();
     let dirs = Dirs::new(cli.class_dir);
+    if cli.strip_metadata { strip_from_jpgs_in_dir(&dirs.photo)?; }
 
     let mut faces = vec![];
     let start = std::time::Instant::now();
@@ -46,17 +47,18 @@ async fn main() {
 
         {
             use KeyCode::*;
-            let face = faces.get_mut(face_n).unwrap();
-            if is_key_down   (Right    ) { face.move_right( d); }
-            if is_key_down   (Left     ) { face.move_right(-d); }
-            if is_key_down   (Down     ) { face.move_down ( d); }
-            if is_key_down   (Up       ) { face.move_down (-d); }
-            if is_key_down   (G        ) { face.zoom_in   ( d); }
-            if is_key_down   (P        ) { face.zoom_in   (-d); }
-            if is_key_pressed(R        ) { face.rotate    ( 1); }
-            if is_key_pressed(L        ) { face.rotate    (-1); }
+            macro_rules! face { () => { faces.get_mut(face_n).unwrap() }; }
+            if is_key_down   (Right    ) { face!().move_right( d); }
+            if is_key_down   (Left     ) { face!().move_right(-d); }
+            if is_key_down   (Down     ) { face!().move_down ( d); }
+            if is_key_down   (Up       ) { face!().move_down (-d); }
+            if is_key_down   (G        ) { face!().zoom_in   ( d); }
+            if is_key_down   (P        ) { face!().zoom_in   (-d); }
+            if is_key_pressed(R        ) { face!().rotate    ( 1); }
+            if is_key_pressed(L        ) { face!().rotate    (-1); }
             if is_key_pressed(Space    ) && face_n < n_faces - 1 { face_n += 1; }
             if is_key_pressed(Backspace) && face_n > 0           { face_n -= 1; }
+            if is_key_pressed(S        ) { save_and_regenerate(&faces, &dirs); }
             if (is_key_down(LeftControl) || is_key_down(RightControl)) && is_key_down(Q) { break; }
         }
 
@@ -73,5 +75,6 @@ async fn main() {
 
         next_frame().await;
     }
-    println!("TODO implement: Saving images.")
+    save_and_regenerate(&faces, &dirs)?;
+    Ok(())
 }

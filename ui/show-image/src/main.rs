@@ -2,15 +2,11 @@ use std::time::Instant;
 
 use show_image::{create_window, event};
 
-use util::{Dirs, ensure_empty_dir, find_jpgs_in_dir};
-use render::trombinoscope;
-use ::face::{
-    save_many_face_metadata, write_many_face_images,
-    metadata::strip_from_jpgs_in_dir,
-};
+use util::{Dirs, find_jpgs_in_dir};
+use ::face::metadata::{save_and_regenerate, strip_from_jpgs_in_dir};
 
 mod face;
-use face::{SiFaceType, SiFace, ViewSi};
+use face::{SiFace, ViewSi};
 
 #[show_image::main]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -66,14 +62,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     save_and_regenerate(&faces, &dirs)?;
-    Ok(())
-}
-
-fn save_and_regenerate(faces: &[SiFaceType], dirs: &Dirs) -> ::face::Result<()> {
-    save_many_face_metadata(faces)?;
-    ensure_empty_dir(&dirs.work)?;
-    ensure_empty_dir(&dirs.render)?;
-    write_many_face_images(faces, &dirs.work)?;
-    trombinoscope(dirs);
     Ok(())
 }

@@ -8,7 +8,8 @@ use bitcode::{Decode, Encode};
 use img_parts::jpeg::{self, Jpeg, JpegSegment};
 use image::codecs::jpeg::JpegEncoder;
 
-use util::{read_jpeg, write_jpeg};
+use render::trombinoscope;
+use util::{Dirs, ensure_empty_dir, read_jpeg, write_jpeg};
 
 use crate::{
     error::{Error, Result},
@@ -116,6 +117,15 @@ impl FaceInImage {
 }
 
 
+pub fn save_and_regenerate<Ui: ui::one::Face>(faces: &[FaceType<Ui>], dirs: &Dirs) -> Result<()> {
+    save_many_face_metadata(faces)?;
+    ensure_empty_dir(&dirs.work)?;
+    ensure_empty_dir(&dirs.render)?;
+    write_many_face_images(faces, &dirs.work)?;
+    trombinoscope(dirs);
+    Ok(())
+}
+
 // TODO replace this with dynamic polymorphism
 /// Store the location and name of each face in the JPEG segment of the image
 /// containing the face
@@ -138,6 +148,7 @@ fn write_one_face_image<Ui: ui::one::Face>(FaceType { face, ui, path }: &FaceTyp
     let path = dir.as_ref().join(&*filename);
     let file = &mut File::create(path)?;
     let mut encoder = JpegEncoder::new(file);
+    dbg!((face.w, face.h()));
     encoder.encode(
         &ui.as_bytes(face),
         face.w as u32,

@@ -898,6 +898,7 @@ dependencies = [
  "console",
  "image 0.25.2",
  "img-parts",
+ "render",
  "thiserror",
  "util",
 ]
@@ -1862,6 +1863,7 @@ version = "0.1.0"
 dependencies = [
  "cli",
  "face",
+ "futures",
  "image 0.25.2",
  "macroquad 0.4.13",
  "render",
