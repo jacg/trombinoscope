@@ -129,7 +129,7 @@ fn rotate(Image { mut bytes, width, height }: Image, rot: i8) -> Image {
                 }
             }
         todo!()},
-        2 => { bytes.reverse(); Image { bytes, width, height }; todo!() },
+        2 => { bytes.reverse(); todo!() },
         3 => todo!(),
         _ => unreachable!(),
     }

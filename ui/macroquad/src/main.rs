@@ -1,3 +1,5 @@
+#![allow(unused)] // while in unfinished state
+
 use macroquad::prelude::*;
 
 use util::{Dirs, find_jpgs_in_dir};

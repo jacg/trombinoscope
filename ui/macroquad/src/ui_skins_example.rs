@@ -1,4 +1,4 @@
-#![allow(unused)]
+#![expect(unused, reason = "macroquad skins example not used yet")]
 
 use macroquad::{
     prelude::*,

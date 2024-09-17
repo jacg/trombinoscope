@@ -49,7 +49,7 @@ impl face::ui::one::Face for SiFace {
     }
 
     // For non-blocking loading with preview
-    fn replace_image(&mut self, path: impl AsRef<Path>) -> ferr::Result<()> {
+    fn replace_image(&mut self, _path: impl AsRef<Path>) -> ferr::Result<()> {
         todo!()
     }
 
