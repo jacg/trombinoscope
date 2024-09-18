@@ -26,11 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     eframe::run_native(
         "Trombinoscope",
         options,
-        Box::new(|cc| {
-            // This gives us image support:
-            egui_extras::install_image_loaders(&cc.egui_ctx);
-            Ok(Box::<App>::new(App::new(dirs, cc)))
-        }),
+        Box::new(|cc| Ok(Box::<App>::new(App::new(dirs, cc)))),
     );
 
     Ok(())
