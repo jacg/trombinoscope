@@ -3,7 +3,7 @@
 members = [
         "cli",
         "face",
-        "render",
+        "render", "ui/egui",
         "ui/macroquad",
         "ui/show-image",
         "util",
