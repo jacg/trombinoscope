@@ -4,10 +4,11 @@ use std::path::{Path, PathBuf};
 
 use eframe::{egui, CreationContext};
 
-use egui::{ColorImage, Image};
+use egui::{ColorImage, Image, TextureHandle};
 
 use face::CropEgui;
-use ::face::FaceInImage;
+use ::face::{ui::one::Face, FaceInImage, ASPECT_RATIO};
+use image::DynamicImage;
 use util::{find_jpgs_in_dir, Dirs};
 
 mod face;
@@ -37,18 +38,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 struct App {
     dirs: Dirs,
     faces: Vec<face::CropEgui>,
+    face_n: usize,
 }
 
 fn load_face(path: impl AsRef<Path>, cc: &CreationContext) -> ::face::Result<CropEgui> {
     let image = image::open(&path)?;
     let face = FaceInImage::from_path_or_default_for(&path, image.width() as f32, image.height() as f32)?;
-    let path_as_id = path.as_ref().to_string_lossy();
-    let size = [image.width() as _, image.height() as _];
-    let image_buffer = image.to_rgba8();
+    let texture_name = path.as_ref().to_string_lossy().to_string();
+    let cropped_image = crop_image_for_texture(&image, &face);
+    let texture = cc.egui_ctx.load_texture(&texture_name, cropped_image, egui::TextureOptions::default());
+    Ok(CropEgui { face, image, texture, texture_name })
+}
+
+fn crop_image_for_texture(image: &DynamicImage, &FaceInImage { cx, cy, w, rot, .. }: &FaceInImage) -> ColorImage {
+    let h = w * ASPECT_RATIO;
+    let cropped = match rot.rem_euclid(4) {
+        0 => image.clone(),
+        1 => image.rotate90(),
+        2 => image.rotate180(),
+        3 => image.rotate270(),
+        _ => unreachable!(),
+    }.crop_imm((cx-w/2.0) as _, (cy-h/2.0) as _, w as _, h as _);
+    let size = [cropped.width() as _, cropped.height() as _];
+    let image_buffer = cropped.to_rgba8();
     let pixels = image_buffer.as_flat_samples();
-    let color_image = egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
-    let texture = cc.egui_ctx.load_texture(path_as_id, color_image, egui::TextureOptions::default());
-    Ok(CropEgui { face, image, texture })
+    egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice())
 }
 
 impl App {
@@ -60,6 +74,7 @@ impl App {
         Self {
             dirs,
             faces,
+            face_n: 0,
         }
     }
 
@@ -75,11 +90,19 @@ impl App {
 
     fn handle_keys(&mut self, ctx: &Context) {
         ctx.input(|i| {
-            if i.key_pressed(Key::Q) && i.modifiers.ctrl {
-                // TODO exit less brutally
-                std::process::exit(0);
+            macro_rules! key {
+                ($key:ident ($($mod:ident)?) $body:tt) => {
+                    if i.key_pressed(Key::$key) $(&& i.modifiers.$mod)? $body
+                };
             }
+            key!{Q (ctrl) { std::process::exit(0) }} // TODO exit less brutally
+            key!(R ()     { self.rotate_current_face( 1, ctx ); })
         });
+    }
+
+    fn rotate_current_face(&mut self, r: u8, ctx: &Context) {
+        dbg!("grrr");
+        self.faces.get_mut(self.face_n).unwrap().rotate( 1, ctx );
     }
 
 }

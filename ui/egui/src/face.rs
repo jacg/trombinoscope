@@ -1,12 +1,15 @@
-use egui::{Context, TextureHandle};
+use egui::{Context, TextureHandle, TextureOptions, Vec2};
 use image::DynamicImage;
 
-use face::FaceInImage;
+use face::{ui::one::Face, FaceInImage, ASPECT_RATIO};
+
+use crate::crop_image_for_texture;
 
 pub (crate) struct CropEgui {
     pub face: FaceInImage,
     pub image: DynamicImage,
     pub texture: TextureHandle,
+    pub texture_name: String,
 }
 
 impl CropEgui {
@@ -14,11 +17,24 @@ impl CropEgui {
         let w = ctx.available_rect().width();
         ui.vertical_centered(|ui| {
             ui.set_width(w / 6.5);
-            ui.image(&self.texture);
+            ui.vertical(|ui| {
+                let w = ui.available_width();
+                ui.add(egui::Image::new(&self.texture)
+                       .max_size(Vec2 { x: w, y: w * ASPECT_RATIO }));
+            });
             ui.label(&self.face.given);
             ui.label(&self.face.family);
+            ui.label(self.face.rot.to_string());
             ui.text_edit_singleline(&mut self.face.given);
         });
+    }
+
+    pub fn rotate(&mut self, d_rot: i8, ctx: &Context) -> face::Result<i8> {
+        dbg!("BBB");
+        self.face.rot += d_rot;
+        let cropped_image = crop_image_for_texture(&self.image, &self.face);
+        self.texture.set(cropped_image, TextureOptions::default());
+        Ok(self.face.rot)
     }
 }
 
