@@ -6,7 +6,7 @@ use util::{Dirs, find_jpgs_in_dir};
 use ::face::metadata::{save_and_regenerate, strip_from_jpgs_in_dir};
 
 mod face;
-use face::{SiFace, ViewSi};
+use face::{CropSi, ViewSi};
 
 #[show_image::main]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -16,7 +16,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let start = Instant::now();
     let mut faces = find_jpgs_in_dir(&dirs.photo).into_iter()
-        .map(<SiFace as ::face::ui::one::Face>::load)
+        .map(<CropSi as ::face::ui::one::Face>::load)
         .collect::<Result<Vec<_>, _>>()?;
     println!("Loading all images took {:.1?}", start.elapsed());
 

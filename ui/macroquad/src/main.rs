@@ -6,7 +6,7 @@ use util::{Dirs, find_jpgs_in_dir};
 use ::face::{metadata::{save_and_regenerate, strip_from_jpgs_in_dir}, ASPECT_RATIO};
 
 mod face;
-use face::{CropMq, FaceMq, ViewMq};
+use face::{CropMq, ViewMq};
 
 mod ui_skins_example;
 
@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start = std::time::Instant::now();
     for jpg in find_jpgs_in_dir(&dirs.photo).into_iter() {
         let texture = load_texture(&jpg.to_string_lossy()).await.unwrap();
-        faces.push(FaceMq::load(jpg).unwrap())
+        faces.push(::face::FaceType::<CropMq>::load(jpg).unwrap())
     }
     println!("Loading of images took {:.0?}", start.elapsed());
 

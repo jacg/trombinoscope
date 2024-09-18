@@ -10,8 +10,6 @@ use ::face::{
     ui,
 };
 
-pub (crate) type FaceMq = face::FaceType<CropMq>;
-
 pub (crate) struct CropMq { pub (crate) image: Texture2D }
 
 pub (crate) struct ViewMq {
@@ -23,8 +21,10 @@ pub (crate) struct ViewMq {
 }
 
 impl ui::one::Face for CropMq {
+
     type View = ViewMq;
-    fn load(path: impl AsRef<std::path::Path>) -> ferr::Result<FaceMq>
+
+    fn load(path: impl AsRef<std::path::Path>) -> face::Result<face::FaceType<Self>>
     where
         Self: Sized,
     {
@@ -40,7 +40,7 @@ impl ui::one::Face for CropMq {
                  path = path.as_ref().display()
         );
 
-        Ok(FaceMq {
+        Ok(face::FaceType::<Self> {
             path: path.as_ref().to_owned(),
             face,
             ui: Self { image },
@@ -56,7 +56,7 @@ impl ui::one::Face for CropMq {
     fn full_h(&self)               -> ferr::Result<f32> { Ok(self.image.size().y) }
     fn view(
         &self,
-        face: &FaceMq,
+        face: &face::FaceType::<Self>,
         &Self::View { col, row, col_w, row_h, color }: &Self::View
     ) -> face::Result<()> {
 

@@ -7,10 +7,8 @@ use face::{
 use image::{DynamicImage, GenericImageView};
 use show_image::WindowProxy;
 
-pub (crate) type SiFaceType = face::FaceType<SiFace>;
-
 #[derive(Debug)]
-pub (crate) struct SiFace {
+pub (crate) struct CropSi {
     pub (crate) rot: i8,
     pub (crate) rotated_image: DynamicImage,
 }
@@ -20,10 +18,11 @@ pub (crate) struct ViewSi {
     pub window: WindowProxy
 }
 
-impl face::ui::one::Face for SiFace {
+impl face::ui::one::Face for CropSi {
+
     type View = ViewSi;
 
-    fn load(path: impl AsRef<Path>) -> ferr::Result<SiFaceType>
+    fn load(path: impl AsRef<Path>) -> face::Result<face::FaceType<Self>>
     where
         Self: Sized,
     {
@@ -45,7 +44,7 @@ impl face::ui::one::Face for SiFace {
         };
 
         let path = path.as_ref().to_owned();
-        ferr::Result::Ok(SiFaceType { path, face, ui })
+        Ok(face::FaceType::<Self> { path, face, ui })
     }
 
     // For non-blocking loading with preview
@@ -72,7 +71,7 @@ impl face::ui::one::Face for SiFace {
 
     fn view(
         &self,
-        face: &SiFaceType,
+        face: &face::FaceType<Self>,
         view: &Self::View
     ) -> ferr::Result<()> {
         let FaceInImage { cx, cy, w, ..  } = face.face;
