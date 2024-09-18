@@ -6,6 +6,8 @@ use eframe::{egui, CreationContext};
 
 use egui::{ColorImage, Image};
 
+use face::CropEgui;
+use ::face::FaceInImage;
 use util::{find_jpgs_in_dir, Dirs};
 
 mod face;
@@ -37,33 +39,23 @@ struct App {
     faces: Vec<face::CropEgui>,
 }
 
-fn load_image_from_path(path: &std::path::Path) -> Result<egui::ColorImage, image::ImageError> {
-    let image = image::ImageReader::open(path)?.decode()?;
+fn load_face(path: impl AsRef<Path>, cc: &CreationContext) -> ::face::Result<CropEgui> {
+    let image = image::open(&path)?;
+    let face = FaceInImage::from_path_or_default_for(&path, image.width() as f32, image.height() as f32)?;
+    let path_as_id = path.as_ref().to_string_lossy();
     let size = [image.width() as _, image.height() as _];
     let image_buffer = image.to_rgba8();
     let pixels = image_buffer.as_flat_samples();
-    Ok(egui::ColorImage::from_rgba_unmultiplied(
-        size,
-        pixels.as_slice(),
-    ))
+    let color_image = egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+    let texture = cc.egui_ctx.load_texture(path_as_id, color_image, egui::TextureOptions::default());
+    Ok(CropEgui { face, image, texture })
 }
 
 impl App {
     fn new(dirs: Dirs, cc: &CreationContext) -> Self {
         let faces = find_jpgs_in_dir(&dirs.photo)
             .into_iter()
-            .filter_map(|path| {
-                let uri = path.to_string_lossy().to_string();
-                util::filename_to_given_family(&path)
-                    .map(move |(given, family)| face::CropEgui {
-                        given, family,
-                        image: cc.egui_ctx.load_texture(
-                            uri,
-                            load_image_from_path(&path).unwrap(),
-                            egui::TextureOptions::default(),
-                        ),
-                    })
-            })
+            .map(|path| load_face(path, cc).unwrap())
             .collect();
         Self {
             dirs,
