@@ -47,6 +47,8 @@ impl FaceInImage {
         }
     }
 
+    /// Load image at `path`. If image contains face metadata, use it; otherwise
+    /// use `with` and `height` to guess where the face is.
     pub fn from_path_or_default_for(path: impl AsRef<Path>, width: f32, height: f32) -> Result<Self> {
         Ok(match FaceInImage::from_jpeg_in_file(&path) {
             Ok(face) => face,
