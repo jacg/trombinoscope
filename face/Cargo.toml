@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 bitcode = "0.6.3"
 console = "0.15.8"
-image = "0.25.1"
+image = "0.25.2"
 img-parts = "0.3.0"
 render = { path = "../render" }
 thiserror = "1.0.63"
