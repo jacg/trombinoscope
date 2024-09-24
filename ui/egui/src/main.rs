@@ -6,12 +6,12 @@ use eframe::{egui, CreationContext};
 
 use egui::{ColorImage, Image, TextureHandle};
 
-use face::CropEgui;
 use ::face::{ui::one::Face, FaceInImage, ASPECT_RATIO};
 use image::DynamicImage;
 use util::{find_jpgs_in_dir, Dirs};
 
 mod face;
+use face::CropEgui;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     
@@ -89,24 +89,71 @@ impl App {
     }
 
     fn handle_keys(&mut self, ctx: &Context) {
+        use crate::egui::Modifiers;
         ctx.input(|i| {
             macro_rules! key {
-                ($key:ident ($($mod:ident)?) $body:tt) => {
-                    if i.key_pressed(Key::$key) $(&& i.modifiers.$mod)? $body
+                ($key:ident ($($mod:ident)*) $body:tt) => {
+                    if i.key_pressed(Key::$key) && i.modifiers.matches_exact($(Modifiers::$mod)|*) $body
                 };
             }
-            key!{Q (ctrl) { std::process::exit(0) }} // TODO exit less brutally
-            key!(R ()     { self.rotate_current_face( 1, ctx ); })
+            key!{Q          (CTRL)  { std::process::exit(0) }} // TODO exit less brutally
+            key!{R          (NONE)  { self.face_rotate( 1, ctx ); }}
+            key!{L          (NONE)  { self.face_rotate(-1, ctx ); }}
+            key!{G          (NONE)  { self.face_zoom(-30.0); }}
+            key!{P          (NONE)  { self.face_zoom( 30.0); }}
+            key!{G          (CTRL)  { self.face_zoom(- 3.0); }}
+            key!{P          (CTRL)  { self.face_zoom(  3.0); }}
+            key!{ArrowRight (NONE)  { self.face_mv_x(-30.0); }}
+            key!{ArrowLeft  (NONE)  { self.face_mv_x( 30.0); }}
+            key!{ArrowDown  (NONE)  { self.face_mv_y(-30.0); }}
+            key!{ArrowUp    (NONE)  { self.face_mv_y( 30.0); }}
+            key!{Space      (NONE)  { self.face_select(Delta::R(1)); }}
+            key!{Backspace  (NONE)  { self.face_select(Delta::L(1)); }}
+            key!{Space      (SHIFT) { self.face_select(Delta::R(6)); }}
+            key!{Backspace  (SHIFT) { self.face_select(Delta::L(6)); }}
         });
     }
 
-    fn rotate_current_face(&mut self, r: u8, ctx: &Context) {
-        dbg!("grrr");
-        self.faces.get_mut(self.face_n).unwrap().rotate( 1, ctx );
+    fn face_rotate(&mut self, d_rot: i8, ctx: &Context) {
+        self.faces.get_mut(self.face_n).unwrap().rotate(d_rot, ctx );
+    }
+
+    fn face_select(&mut self, delta: Delta) {
+        self.face_n = move_index_by(self.face_n, delta, self.faces.len());
+    }
+
+    fn face_zoom(&mut self, delta: f32) {
+        let face = &mut self.faces[self.face_n];
+        face.face.w += delta;
+        face.set_texture_from_cropped_image();
+    }
+
+    fn face_mv_x(&mut self, delta: f32) {
+        let face = &mut self.faces[self.face_n];
+        face.face.cx += delta;
+        face.set_texture_from_cropped_image();
+    }
+
+    fn face_mv_y(&mut self, delta: f32) {
+        let face = &mut self.faces[self.face_n];
+        face.face.cy += delta;
+        face.set_texture_from_cropped_image();
     }
 
 }
 
+enum Delta {
+    R(usize),
+    L(usize),
+}
+
+fn move_index_by(index: usize, delta: Delta, size: usize) -> usize {
+    match delta {
+        Delta::R(d) => index.wrapping_add(       d),
+        Delta::L(d) => index.wrapping_add(size - d),
+    }.rem_euclid(size)
+
+}
 
 use egui::{Context, Grid, Key, Response, Sense, Ui};
 

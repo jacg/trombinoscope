@@ -30,11 +30,14 @@ impl CropEgui {
     }
 
     pub fn rotate(&mut self, d_rot: i8, ctx: &Context) -> face::Result<i8> {
-        dbg!("BBB");
         self.face.rot += d_rot;
+        self.set_texture_from_cropped_image();
+        Ok(self.face.rot)
+    }
+
+    pub fn set_texture_from_cropped_image(&mut self) {
         let cropped_image = crop_image_for_texture(&self.image, &self.face);
         self.texture.set(cropped_image, TextureOptions::default());
-        Ok(self.face.rot)
     }
 }
 
