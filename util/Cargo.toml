@@ -8,6 +8,5 @@ image = "0.25.2"
 img-parts = "0.3.0"
 
 [dev-dependencies]
-nextest = "0.0.0"
 pretty_assertions = "1.4.0"
 rstest = "0.22.0"
