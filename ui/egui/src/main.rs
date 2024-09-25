@@ -160,7 +160,6 @@ impl App {
 
 }
 
-// TODO replace this with dynamic polymorphism
 /// Store the location and name of each face in the JPEG segment of the image
 /// containing the face
 fn save_many_face_metadata_xxx(faces: &[face::CropEgui]) -> ::face::Result<()> {
@@ -168,7 +167,6 @@ fn save_many_face_metadata_xxx(faces: &[face::CropEgui]) -> ::face::Result<()> {
     Ok(())
 }
 
-// TODO dynamic polymorphism for faces
 /// Save each cropped face in its own image file in `dir`. Assumes `dir` exists.
 fn write_many_face_images_xxx(faces: &[face::CropEgui], dir: impl AsRef<Path>) -> ::face::Result<()> {
     for face in faces { write_one_face_image_xxx(face, &dir)?; }

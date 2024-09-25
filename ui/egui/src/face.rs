@@ -53,7 +53,3 @@ impl CropEgui {
         crate::crop(&self.image, &self.face).as_bytes().to_owned()
     }
 }
-
-impl face::ui::one::Face for CropEgui {
-    //fn as_bytes(&self, face: &face::FaceInImage) ->          Vec< u8> { todo!() }
-}
