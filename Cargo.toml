@@ -3,9 +3,8 @@
 members = [
         "cli",
         "face",
-        "render", "ui/egui",
-        "ui/macroquad",
-        "ui/show-image",
+        "render",
+        "ui/egui",
         "util",
 ]
 
