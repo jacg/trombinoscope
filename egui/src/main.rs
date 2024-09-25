@@ -1,3 +1,9 @@
+// TODO fix highlighting of current face
+// TODO stop typing names being picked up as crop commands
+// TODO sort faces in UI alphabetically
+// TODO asynchronous I/O
+// TODO fine face controls
+
 use std::{fs::File, path::{Path, PathBuf}};
 
 use eframe::{egui, CreationContext};
