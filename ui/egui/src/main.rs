@@ -1,12 +1,8 @@
-#![expect(unused, reason = "egui implementation in progress")]
-
-use std::{fs::File, path::{Path, PathBuf}};
+use std::{fs::File, path::Path};
 
 use eframe::{egui, CreationContext};
 
-use egui::{ColorImage, Image, TextureHandle};
-
-use ::face::{save_many_face_metadata, ui::one::Face, write_many_face_images, FaceInImage, ASPECT_RATIO};
+use ::face::{FaceInImage, ASPECT_RATIO};
 use image::{codecs::jpeg::JpegEncoder, DynamicImage};
 use render::trombinoscope;
 use util::{ensure_empty_dir, find_jpgs_in_dir, Dirs};
@@ -49,7 +45,7 @@ fn load_face(path: impl AsRef<Path>, cc: &CreationContext) -> ::face::Result<Cro
     let cropped_image = crop(&image, &face);
     let data = crop_image_for_texture(&cropped_image);
     let texture = cc.egui_ctx.load_texture(&texture_name, data, egui::TextureOptions::default());
-    Ok(CropEgui { face, image, texture, texture_name, path: path.as_ref().into() })
+    Ok(CropEgui { face, image, texture, path: path.as_ref().into() })
 }
 
 pub fn crop(image: &DynamicImage, &FaceInImage { cx, cy, w, rot, .. }: &FaceInImage) -> DynamicImage {
@@ -127,7 +123,7 @@ impl App {
     }
 
     fn face_rotate(&mut self, d_rot: i8, ctx: &Context) {
-        self.faces.get_mut(self.face_n).unwrap().rotate(d_rot, ctx);
+        self.faces.get_mut(self.face_n).unwrap().rotate(d_rot);
     }
 
     fn face_select(&mut self, delta: Delta) {
@@ -215,7 +211,7 @@ fn move_index_by(index: usize, delta: Delta, size: usize) -> usize {
 
 }
 
-use egui::{Context, Grid, Key, Response, Sense, Ui};
+use egui::{Context, Key, Ui};
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
