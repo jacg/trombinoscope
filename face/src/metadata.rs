@@ -6,15 +6,12 @@ use std::{
 
 use bitcode::{Decode, Encode};
 use img_parts::jpeg::{self, Jpeg, JpegSegment};
-use image::codecs::jpeg::JpegEncoder;
 
-use render::trombinoscope;
-use util::{Dirs, ensure_empty_dir, read_jpeg, write_jpeg};
+use util::{read_jpeg, write_jpeg};
 
 use crate::{
     error::{Error, Result},
-    ui,
-    FaceType, ASPECT_RATIO,
+    ASPECT_RATIO,
 };
 
 /// The information needed to label and locate a face inside a photograph
