@@ -161,18 +161,18 @@ pub fn crop_image_for_texture(cropped: &DynamicImage) -> egui::ColorImage {
 /// Store the location and name of each face in the JPEG segment of the image
 /// containing the face
 fn save_many_face_metadata(faces: &[CropEgui]) -> face::Result<()> {
-    for face in faces { face.save_metadata_xxx()?; }
+    for face in faces { face.save_metadata()?; }
     Ok(())
 }
 
 /// Save each cropped face in its own image file in `dir`. Assumes `dir` exists.
 fn write_many_face_images(faces: &[CropEgui], dir: impl AsRef<Path>) -> face::Result<()> {
-    for face in faces { write_one_face_image_xxx(face, &dir)?; }
+    for face in faces { write_one_face_image(face, &dir)?; }
     Ok(())
 }
 
 /// Save one cropped face in its own image file in `dir`. Assumes `dir` exists.
-fn write_one_face_image_xxx(f: &CropEgui, dir: impl AsRef<Path>) -> face::Result<()> {
+fn write_one_face_image(f: &CropEgui, dir: impl AsRef<Path>) -> face::Result<()> {
     let filename = format!("{} @ {}.jpg", &f.face.given, &f.face.family);
     let path = dir.as_ref().join(&*filename);
     let file = &mut File::create(path)?;
@@ -188,7 +188,7 @@ fn write_one_face_image_xxx(f: &CropEgui, dir: impl AsRef<Path>) -> face::Result
 }
 
 impl CropEgui {
-    pub fn save_metadata_xxx(&self) -> face::Result<()> { self.face.embed_in_jpeg(&self.path) }
+    pub fn save_metadata(&self) -> face::Result<()> { self.face.embed_in_jpeg(&self.path) }
 }
 
 
