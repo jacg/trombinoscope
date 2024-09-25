@@ -1,20 +1,21 @@
 #![expect(unused, reason = "egui implementation in progress")]
 
-use std::path::{Path, PathBuf};
+use std::{fs::File, path::{Path, PathBuf}};
 
 use eframe::{egui, CreationContext};
 
 use egui::{ColorImage, Image, TextureHandle};
 
-use ::face::{ui::one::Face, FaceInImage, ASPECT_RATIO};
-use image::DynamicImage;
-use util::{find_jpgs_in_dir, Dirs};
+use ::face::{save_many_face_metadata, ui::one::Face, write_many_face_images, FaceInImage, ASPECT_RATIO};
+use image::{codecs::jpeg::JpegEncoder, DynamicImage};
+use render::trombinoscope;
+use util::{ensure_empty_dir, find_jpgs_in_dir, Dirs};
 
 mod face;
 use face::CropEgui;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    
+
     let cli = cli::parse();
     let dirs = Dirs::new(cli.class_dir);
 
@@ -45,20 +46,29 @@ fn load_face(path: impl AsRef<Path>, cc: &CreationContext) -> ::face::Result<Cro
     let image = image::open(&path)?;
     let face = FaceInImage::from_path_or_default_for(&path, image.width() as f32, image.height() as f32)?;
     let texture_name = path.as_ref().to_string_lossy().to_string();
-    let cropped_image = crop_image_for_texture(&image, &face);
-    let texture = cc.egui_ctx.load_texture(&texture_name, cropped_image, egui::TextureOptions::default());
-    Ok(CropEgui { face, image, texture, texture_name })
+    let cropped_image = crop(&image, &face);
+    let data = crop_image_for_texture(&cropped_image);
+    let texture = cc.egui_ctx.load_texture(&texture_name, data, egui::TextureOptions::default());
+    Ok(CropEgui { face, image, texture, texture_name, path: path.as_ref().into() })
 }
 
-fn crop_image_for_texture(image: &DynamicImage, &FaceInImage { cx, cy, w, rot, .. }: &FaceInImage) -> ColorImage {
+pub fn crop(image: &DynamicImage, &FaceInImage { cx, cy, w, rot, .. }: &FaceInImage) -> DynamicImage {
     let h = w * ASPECT_RATIO;
-    let cropped = match rot.rem_euclid(4) {
+    match rot.rem_euclid(4) {
         0 => image.clone(),
         1 => image.rotate90(),
         2 => image.rotate180(),
         3 => image.rotate270(),
         _ => unreachable!(),
-    }.crop_imm((cx-w/2.0) as _, (cy-h/2.0) as _, w as _, h as _);
+    }.crop_imm(
+        (cx - w / 2.0) as _,
+        (cy - h / 2.0) as _,
+        w              as _,
+        h              as _,
+    )
+}
+
+pub fn crop_image_for_texture(cropped: &DynamicImage) -> egui::ColorImage {
     let size = [cropped.width() as _, cropped.height() as _];
     let image_buffer = cropped.to_rgba8();
     let pixels = image_buffer.as_flat_samples();
@@ -82,7 +92,7 @@ impl App {
         ui.heading("Trombinoscope");
         egui::Grid::new("face grid").show(ui, |ui| {
             for (n, face) in self.faces.iter_mut().enumerate() {
-                face.show(ui, ctx);
+                face.show(ui, ctx, n == self.face_n);
                 if n % 6 == 5 { ui.end_row() }
             }
         });
@@ -111,11 +121,13 @@ impl App {
             key!{Backspace  (NONE)  { self.face_select(Delta::L(1)); }}
             key!{Space      (SHIFT) { self.face_select(Delta::R(6)); }}
             key!{Backspace  (SHIFT) { self.face_select(Delta::L(6)); }}
+            key!{S          (CTRL)  { self.save_and_regenerate(); }}
+
         });
     }
 
     fn face_rotate(&mut self, d_rot: i8, ctx: &Context) {
-        self.faces.get_mut(self.face_n).unwrap().rotate(d_rot, ctx );
+        self.faces.get_mut(self.face_n).unwrap().rotate(d_rot, ctx);
     }
 
     fn face_select(&mut self, delta: Delta) {
@@ -140,7 +152,55 @@ impl App {
         face.set_texture_from_cropped_image();
     }
 
+    fn save_and_regenerate(&self) -> ::face::Result<()> {
+        save_many_face_metadata_xxx(&self.faces)?;
+        ensure_empty_dir(&self.dirs.work)?;
+        ensure_empty_dir(&self.dirs.render)?;
+        write_many_face_images_xxx(&self.faces, &self.dirs.work)?;
+        dbg!(&self.dirs.photo);
+        trombinoscope(&self.dirs);
+        Ok(())
+    }
+
 }
+
+// TODO replace this with dynamic polymorphism
+/// Store the location and name of each face in the JPEG segment of the image
+/// containing the face
+fn save_many_face_metadata_xxx(faces: &[face::CropEgui]) -> ::face::Result<()> {
+    for face in faces { face.save_metadata_xxx()?; }
+    Ok(())
+}
+
+// TODO dynamic polymorphism for faces
+/// Save each cropped face in its own image file in `dir`. Assumes `dir` exists.
+fn write_many_face_images_xxx(faces: &[face::CropEgui], dir: impl AsRef<Path>) -> ::face::Result<()> {
+    for face in faces { write_one_face_image_xxx(face, &dir)?; }
+    Ok(())
+}
+
+/// Save one cropped face in its own image file in `dir`. Assumes `dir` exists.
+//fn write_one_face_image_xxx(FaceType { face, ui, path }: &CropEgui, dir: impl AsRef<Path>) -> ::face::Result<()> {
+fn write_one_face_image_xxx(f: &CropEgui, dir: impl AsRef<Path>) -> ::face::Result<()> {
+    let filename = format!("{} @ {}.jpg", &f.face.given, &f.face.family);
+    let path = dir.as_ref().join(&*filename);
+    let file = &mut File::create(path)?;
+    let mut encoder = JpegEncoder::new(file);
+    dbg!((f.face.w, f.face.h()));
+    encoder.encode(
+        &f.as_bytes(),
+        f.face.w as u32,
+        f.face.h() as u32,
+        image::ExtendedColorType::Rgb8
+    ).unwrap();
+    Ok(())
+}
+
+impl CropEgui {
+    pub fn save_metadata_xxx(&self) -> ::face::Result<()> { self.face.embed_in_jpeg(&self.path) }
+}
+
+
 
 enum Delta {
     R(usize),

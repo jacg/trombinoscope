@@ -38,8 +38,8 @@ impl FaceInImage {
             if w < h {(w, h, 0)} else {(h, w, 3)}
         };
         Self {
-            given: "TODO Prénom".into(),
-            family: "TODO Nom".into(),
+            given:  String::default(),
+            family: String::default(),
             cx: w / 3.0,
             cy: h / 4.0,
             w:  w / 8.0,
