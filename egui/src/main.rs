@@ -43,9 +43,16 @@ struct App {
 
 impl App {
     fn new(dirs: Dirs, cc: &CreationContext) -> Self {
+        let (tx, rx) = mpsc::channel::<(PathBuf, mpsc::Sender<face::Result<Data>>)>();
+        std::thread::spawn(move || {
+            for (path, tx) in rx.iter() {
+                tx.send(load_face_data(path));
+            }
+        });
+
         let faces = find_jpgs_in_dir(&dirs.photo)
             .into_iter()
-            .map(|path| Face::load(path, cc).unwrap())
+            .map(move |path| { Face::load(path, cc, tx.clone()).unwrap() })
             .collect();
         let mut it = Self {
             dirs,
@@ -176,13 +183,16 @@ fn load_face_data(path: PathBuf) -> face::Result<Data> {
 
 impl Face {
 
-    fn load(path: impl AsRef<Path>, cc: &CreationContext) -> face::Result<Face> {
+    fn load(
+        path: impl AsRef<Path>,
+        cc: &CreationContext,
+        tx_req: mpsc::Sender<(PathBuf, mpsc::Sender<face::Result<Data>>)>,
+    ) -> face::Result<Face> {
         let (tx, rx) = mpsc::channel();
-        let owned_path = path.as_ref().to_owned();
+        tx_req.send((path.as_ref().into(), tx));
         let texture_name = path.as_ref().to_string_lossy().to_string();
         let dummy_image = ColorImage::new([400,500], Color32::GRAY);
         let texture = cc.egui_ctx.load_texture(&texture_name, dummy_image, egui::TextureOptions::default());
-        std::thread::spawn(move || { tx.send(load_face_data(owned_path)) });
         Ok(Face {
             path: path.as_ref().into(),
             data: Data::Loading(rx),
