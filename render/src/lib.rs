@@ -17,7 +17,7 @@ use typst::{
     Library,
 };
 
-use util::{Dirs, FileType, Item, Name, find_jpgs_in_dir, path_to_item, family_given, unix_rm_rf, unix_mv};
+use util::{Dirs, FileType, Item, Name, find_jpgs_in_dir, path_to_item, sort_key, unix_rm_rf, unix_mv};
 
 /// Main interface that determines the environment for Typst.
 pub struct TypstWrapperWorld {
@@ -404,7 +404,7 @@ pub fn trombinoscope(dir: &Dirs) {
         .collect::<Vec<_>>();
 
     let mut items = items.to_vec();
-    items.sort_by(family_given);
+    items.sort_by_cached_key(|f| sort_key(&f.name.given, &f.name.family));
 
     use FileType::*;
     render(trombi_typst_src(&items, dir), dir, Trombi);

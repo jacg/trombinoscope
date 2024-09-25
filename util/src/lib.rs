@@ -113,15 +113,8 @@ pub fn read_jpeg(path: impl AsRef<Path>) -> Jpeg { bytes_to_jpeg(&std::fs::read(
 pub fn write_jpeg(jpeg: Jpeg, sink: &mut impl Write) { jpeg.encoder().write_to(sink).unwrap(); }
 pub fn bytes_to_jpeg(bytes: &[u8]) -> Jpeg { Jpeg::from_bytes(bytes.to_owned().into()).unwrap() }
 
-/// Relative ordering for names, giving precedence to family name over given
-/// name
-pub fn family_given(l: &Item, r: &Item) -> Ordering {
-    use std::cmp::Ordering::*;
-    let (Item { name: l, .. }, Item { name: r, .. }) = (l,r);
-    match l.family.to_uppercase().cmp(&r.family.to_uppercase()) {
-        Equal => l.given.to_uppercase().cmp(&r.given.to_uppercase()),
-        different => different,
-    }
+pub fn sort_key(given: &str, family: &str) -> (String, String) {
+    (family.to_ascii_uppercase(), given.to_ascii_uppercase())
 }
 
 pub fn move_index_by(index: usize, delta: isize, size: usize) -> usize {

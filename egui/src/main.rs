@@ -1,6 +1,5 @@
 // TODO fix highlighting of current face
 // TODO stop typing names being picked up as crop commands
-// TODO sort faces in UI alphabetically
 // TODO asynchronous I/O
 // TODO fine face controls
 
@@ -47,11 +46,13 @@ impl App {
             .into_iter()
             .map(|path| Face::load(path, cc).unwrap())
             .collect();
-        Self {
+        let mut it = Self {
             dirs,
             faces,
             face_n: 0,
-        }
+        };
+        it.sort();
+        it
     }
 
     pub fn show(&mut self, ui: &mut Ui, ctx: &Context) {
@@ -87,8 +88,8 @@ impl App {
             key!{Backspace  (NONE)  { self.face_select(-1); }}
             key!{Space      (SHIFT) { self.face_select( 6); }}
             key!{Backspace  (SHIFT) { self.face_select(-6); }}
-            key!{S          (CTRL)  { self.save_and_regenerate(); }}
-
+            key!{S          (CTRL)  { self.sort(); self.save_and_regenerate(); }}
+            key!{O          (CTRL)  { self.sort(); }}
         });
     }
 
@@ -116,6 +117,10 @@ impl App {
         let face = &mut self.faces[self.face_n];
         face.face.cy += delta;
         face.set_texture_from_cropped_image();
+    }
+
+    fn sort(&mut self) {
+        self.faces.sort_by_cached_key(|f| (f.face.family.to_uppercase(), f.face.given.to_uppercase()));
     }
 
     fn save_and_regenerate(&self) -> face::Result<()> {
