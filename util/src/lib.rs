@@ -124,6 +124,10 @@ pub fn family_given(l: &Item, r: &Item) -> Ordering {
     }
 }
 
+pub fn move_index_by(index: usize, delta: isize, size: usize) -> usize {
+    (index as isize + delta).rem_euclid(size as _) as _
+}
+
 
 #[cfg(test)]
 mod tests {

@@ -6,7 +6,7 @@ use image::{codecs::jpeg::JpegEncoder, DynamicImage};
 
 use face::{FaceInImage, ASPECT_RATIO};
 use render::trombinoscope;
-use util::{ensure_empty_dir, find_jpgs_in_dir, Dirs};
+use util::{ensure_empty_dir, find_jpgs_in_dir, move_index_by, Dirs};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 
@@ -189,10 +189,6 @@ fn write_one_face_image(f: &Face, dir: impl AsRef<Path>) -> face::Result<()> {
 
 impl Face {
     pub fn save_metadata(&self) -> face::Result<()> { self.face.embed_in_jpeg(&self.path) }
-}
-
-fn move_index_by(index: usize, delta: isize, size: usize) -> usize {
-    (index as isize + delta).rem_euclid(size as _) as _
 }
 
 impl eframe::App for App {
