@@ -64,6 +64,47 @@ pub fn crop(image: &DynamicImage, &FaceInImage { cx, cy, w, rot, .. }: &FaceInIm
     )
 }
 
+// TODO dynamic polymorphism for faces
+/// Save each cropped face in its own image file in `dir`. Assumes `dir` exists.
+pub fn write_many_face_images(faces: &[CropEgui], dir: impl AsRef<Path>) -> ::face::Result<()> {
+    for face in faces { write_one_face_image(face, &dir)?; }
+    Ok(())
+}
+
+// TODO replace this with dynamic polymorphism
+/// Store the location and name of each face in the JPEG segment of the image
+/// containing the face
+pub fn save_many_face_metadata(faces: &[CropEgui]) -> ::face::Result<()> {
+    for face in faces { face.save_metadata_xxx()?; }
+    Ok(())
+}
+
+pub fn save_and_regenerate(faces: &[CropEgui], dirs: &Dirs) -> ::face::Result<()> {
+    save_many_face_metadata(faces)?;
+    ensure_empty_dir(&dirs.work)?;
+    ensure_empty_dir(&dirs.render)?;
+    write_many_face_images(faces, &dirs.work)?;
+    trombinoscope(dirs);
+    Ok(())
+}
+
+/// Save one cropped face in its own image file in `dir`. Assumes `dir` exists.
+fn write_one_face_image(it: &CropEgui, dir: impl AsRef<Path>) -> ::face::Result<()> {
+    // let filename = format!("{} @ {}.jpg", &face.given, &face.family);
+    let filename = it.path.file_name().unwrap().to_string_lossy();
+    let path = dir.as_ref().join(&*filename);
+    let file = &mut File::create(path)?;
+    let mut encoder = JpegEncoder::new(file);
+    dbg!((it.face.w, it.face.h()));
+    encoder.encode(
+        &it.as_bytes(), //&ui.as_bytes(face),
+        it.face.w as u32,
+        it.face.h() as u32,
+        image::ExtendedColorType::Rgb8
+    ).unwrap();
+    Ok(())
+}
+
 pub fn crop_image_for_texture(cropped: &DynamicImage) -> egui::ColorImage {
     let size = [cropped.width() as _, cropped.height() as _];
     let image_buffer = cropped.to_rgba8();
@@ -176,7 +217,7 @@ fn write_many_face_images_xxx(faces: &[face::CropEgui], dir: impl AsRef<Path>) -
 }
 
 /// Save one cropped face in its own image file in `dir`. Assumes `dir` exists.
-//fn write_one_face_image_xxx(FaceType { face, ui, path }: &CropEgui, dir: impl AsRef<Path>) -> ::face::Result<()> {
+//fn write_one_face_image_xxx(FaceType { face, ui, path }: &CropEgui, dir: impl AsRef<Path>) -> ::face::::face::Result<()> {
 fn write_one_face_image_xxx(f: &CropEgui, dir: impl AsRef<Path>) -> ::face::Result<()> {
     let filename = format!("{} @ {}.jpg", &f.face.given, &f.face.family);
     let path = dir.as_ref().join(&*filename);

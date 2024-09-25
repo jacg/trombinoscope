@@ -119,48 +119,6 @@ impl FaceInImage {
 }
 
 
-pub fn save_and_regenerate<Ui: ui::one::Face>(faces: &[FaceType<Ui>], dirs: &Dirs) -> Result<()> {
-    save_many_face_metadata(faces)?;
-    ensure_empty_dir(&dirs.work)?;
-    ensure_empty_dir(&dirs.render)?;
-    write_many_face_images(faces, &dirs.work)?;
-    trombinoscope(dirs);
-    Ok(())
-}
-
-// TODO replace this with dynamic polymorphism
-/// Store the location and name of each face in the JPEG segment of the image
-/// containing the face
-pub fn save_many_face_metadata<Ui: ui::one::Face>(faces: &[FaceType<Ui>]) -> Result<()> {
-    for face in faces { face.save_metadata()?; }
-    Ok(())
-}
-
-// TODO dynamic polymorphism for faces
-/// Save each cropped face in its own image file in `dir`. Assumes `dir` exists.
-pub fn write_many_face_images<Ui: ui::one::Face>(faces: &[FaceType<Ui>], dir: impl AsRef<Path>) -> Result<()> {
-    for face in faces { write_one_face_image(face, &dir)?; }
-    Ok(())
-}
-
-/// Save one cropped face in its own image file in `dir`. Assumes `dir` exists.
-fn write_one_face_image<Ui: ui::one::Face>(FaceType { face, ui, path }: &FaceType<Ui>, dir: impl AsRef<Path>) -> Result<()> {
-    // let filename = format!("{} @ {}.jpg", &face.given, &face.family);
-    let filename = path.file_name().unwrap().to_string_lossy();
-    let path = dir.as_ref().join(&*filename);
-    let file = &mut File::create(path)?;
-    let mut encoder = JpegEncoder::new(file);
-    dbg!((face.w, face.h()));
-    encoder.encode(
-        &ui.as_bytes(face),
-        face.w as u32,
-        face.h() as u32,
-        image::ExtendedColorType::Rgb8
-    ).unwrap();
-    Ok(())
-}
-
-
 /// INCOMPLETE
 pub fn strip_from_jpgs_in_dir(dir: impl AsRef<Path>) -> Result<()> {
     let mut stdout = console::Term::stdout();

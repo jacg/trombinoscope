@@ -58,5 +58,5 @@ impl CropEgui {
 pub (crate) struct ViewEgui;
 
 impl face::ui::one::Face for CropEgui {
-    fn as_bytes(&self, face: &face::FaceInImage) ->          Vec< u8> { todo!() }
+    //fn as_bytes(&self, face: &face::FaceInImage) ->          Vec< u8> { todo!() }
 }

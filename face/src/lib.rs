@@ -2,7 +2,7 @@ pub mod metadata;
 pub mod ui;
 pub mod error;
 
-pub use metadata::{FaceInImage, save_many_face_metadata, write_many_face_images};
+pub use metadata::FaceInImage;
 pub use error::{Error, Result};
 
 use std::path::PathBuf;
