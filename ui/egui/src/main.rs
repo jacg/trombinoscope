@@ -1,14 +1,12 @@
-use std::{fs::File, path::Path};
+use std::{fs::File, path::{Path, PathBuf}};
 
 use eframe::{egui, CreationContext};
-
-use ::face::{FaceInImage, ASPECT_RATIO};
+use egui::{Context, Key, TextureHandle, TextureOptions, Ui, Vec2};
 use image::{codecs::jpeg::JpegEncoder, DynamicImage};
+
+use face::{FaceInImage, ASPECT_RATIO};
 use render::trombinoscope;
 use util::{ensure_empty_dir, find_jpgs_in_dir, Dirs};
-
-mod face;
-use face::CropEgui;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 
@@ -34,11 +32,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 struct App {
     dirs: Dirs,
-    faces: Vec<face::CropEgui>,
+    faces: Vec<CropEgui>,
     face_n: usize,
 }
 
-fn load_face(path: impl AsRef<Path>, cc: &CreationContext) -> ::face::Result<CropEgui> {
+fn load_face(path: impl AsRef<Path>, cc: &CreationContext) -> face::Result<CropEgui> {
     let image = image::open(&path)?;
     let face = FaceInImage::from_path_or_default_for(&path, image.width() as f32, image.height() as f32)?;
     let texture_name = path.as_ref().to_string_lossy().to_string();
@@ -62,13 +60,6 @@ pub fn crop(image: &DynamicImage, &FaceInImage { cx, cy, w, rot, .. }: &FaceInIm
         w              as _,
         h              as _,
     )
-}
-
-pub fn crop_image_for_texture(cropped: &DynamicImage) -> egui::ColorImage {
-    let size = [cropped.width() as _, cropped.height() as _];
-    let image_buffer = cropped.to_rgba8();
-    let pixels = image_buffer.as_flat_samples();
-    egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice())
 }
 
 impl App {
@@ -148,11 +139,11 @@ impl App {
         face.set_texture_from_cropped_image();
     }
 
-    fn save_and_regenerate(&self) -> ::face::Result<()> {
-        save_many_face_metadata_xxx(&self.faces)?;
+    fn save_and_regenerate(&self) -> face::Result<()> {
+        save_many_face_metadata(&self.faces)?;
         ensure_empty_dir(&self.dirs.work)?;
         ensure_empty_dir(&self.dirs.render)?;
-        write_many_face_images_xxx(&self.faces, &self.dirs.work)?;
+        write_many_face_images(&self.faces, &self.dirs.work)?;
         dbg!(&self.dirs.photo);
         trombinoscope(&self.dirs);
         Ok(())
@@ -160,22 +151,28 @@ impl App {
 
 }
 
+pub fn crop_image_for_texture(cropped: &DynamicImage) -> egui::ColorImage {
+    let size = [cropped.width() as _, cropped.height() as _];
+    let image_buffer = cropped.to_rgba8();
+    let pixels = image_buffer.as_flat_samples();
+    egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice())
+}
+
 /// Store the location and name of each face in the JPEG segment of the image
 /// containing the face
-fn save_many_face_metadata_xxx(faces: &[face::CropEgui]) -> ::face::Result<()> {
+fn save_many_face_metadata(faces: &[CropEgui]) -> face::Result<()> {
     for face in faces { face.save_metadata_xxx()?; }
     Ok(())
 }
 
 /// Save each cropped face in its own image file in `dir`. Assumes `dir` exists.
-fn write_many_face_images_xxx(faces: &[face::CropEgui], dir: impl AsRef<Path>) -> ::face::Result<()> {
+fn write_many_face_images(faces: &[CropEgui], dir: impl AsRef<Path>) -> face::Result<()> {
     for face in faces { write_one_face_image_xxx(face, &dir)?; }
     Ok(())
 }
 
 /// Save one cropped face in its own image file in `dir`. Assumes `dir` exists.
-//fn write_one_face_image_xxx(FaceType { face, ui, path }: &CropEgui, dir: impl AsRef<Path>) -> ::face::::face::Result<()> {
-fn write_one_face_image_xxx(f: &CropEgui, dir: impl AsRef<Path>) -> ::face::Result<()> {
+fn write_one_face_image_xxx(f: &CropEgui, dir: impl AsRef<Path>) -> face::Result<()> {
     let filename = format!("{} @ {}.jpg", &f.face.given, &f.face.family);
     let path = dir.as_ref().join(&*filename);
     let file = &mut File::create(path)?;
@@ -191,7 +188,7 @@ fn write_one_face_image_xxx(f: &CropEgui, dir: impl AsRef<Path>) -> ::face::Resu
 }
 
 impl CropEgui {
-    pub fn save_metadata_xxx(&self) -> ::face::Result<()> { self.face.embed_in_jpeg(&self.path) }
+    pub fn save_metadata_xxx(&self) -> face::Result<()> { self.face.embed_in_jpeg(&self.path) }
 }
 
 
@@ -209,13 +206,60 @@ fn move_index_by(index: usize, delta: Delta, size: usize) -> usize {
 
 }
 
-use egui::{Context, Key, Ui};
-
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.handle_keys(ctx);
         egui::CentralPanel::default().show(ctx, |ui| {
             self.show(ui, ctx);
         });
+    }
+}
+
+pub (crate) struct CropEgui {
+    pub path: PathBuf,
+    pub face: FaceInImage,
+    pub image: DynamicImage,
+    pub texture: TextureHandle,
+}
+
+impl CropEgui {
+    pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, selected: bool) {
+        let w = ctx.available_rect().width();
+        egui::Frame::none()
+            .fill(if selected {egui::Color32::RED} else { egui::Color32::BLACK })
+            .show(ui, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.set_width(w / 6.5);
+                    ui.vertical(|ui| {
+                        let w = ui.available_width();
+                        ui.add(egui::Image::new(&self.texture)
+                               .max_size(Vec2 { x: w, y: w * ASPECT_RATIO }));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("prénom : ");
+                        ui.text_edit_singleline(&mut self.face.given);
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("nom : ");
+                        ui.text_edit_singleline(&mut self.face.family);
+                    });
+                });
+            });
+    }
+
+    pub fn rotate(&mut self, d_rot: i8) -> face::Result<i8> {
+        self.face.rot = (self.face.rot + d_rot).rem_euclid(4);
+        self.set_texture_from_cropped_image();
+        Ok(self.face.rot)
+    }
+
+    pub fn set_texture_from_cropped_image(&mut self) {
+        let cropped_image = crate::crop(&self.image, &self.face);
+        let data = crop_image_for_texture(&cropped_image);
+        self.texture.set(data, TextureOptions::default());
+    }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        crate::crop(&self.image, &self.face).as_bytes().to_owned()
     }
 }
