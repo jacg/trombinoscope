@@ -1,5 +1,4 @@
 use std::{
-    cmp::Ordering,
     io::{self, Write},
     ffi::OsStr,
     path::{Path, PathBuf},

@@ -17,6 +17,9 @@ pub enum Error{
     #[error("TODO OsString error description")]
     Abcd(OsString),
 
+    #[error("Face not loaded yet")]
+    FaceNotLoaded,
+
     #[error("TODO io::Error description")]
     XXX(#[from] std::io::Error),
 

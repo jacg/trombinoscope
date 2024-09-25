@@ -2,11 +2,12 @@
 // TODO stop typing names being picked up as crop commands
 // TODO asynchronous I/O
 // TODO fine face controls
+// TODO add scroll or make all faces fit on screen
 
-use std::{fs::File, path::{Path, PathBuf}};
+use std::{fs::File, path::{Path, PathBuf}, sync::mpsc};
 
 use eframe::{egui, CreationContext};
-use egui::{Context, Key, TextureHandle, TextureOptions, Ui, Vec2};
+use egui::{Color32, ColorImage, Context, Key, TextureHandle, TextureOptions, Ui, Vec2};
 use image::{codecs::jpeg::JpegEncoder, DynamicImage};
 
 use face::{FaceInImage, ASPECT_RATIO};
@@ -102,25 +103,35 @@ impl App {
     }
 
     fn face_zoom(&mut self, delta: f32) {
-        let face = &mut self.faces[self.face_n];
-        face.face.w += delta;
-        face.set_texture_from_cropped_image();
+        let full_face = &mut self.faces[self.face_n];
+        if let Data::Ready { face, .. } = &mut full_face.data {
+            face.w += delta;
+            full_face.set_texture_from_cropped_image();
+        }
     }
 
     fn face_mv_x(&mut self, delta: f32) {
-        let face = &mut self.faces[self.face_n];
-        face.face.cx += delta;
-        face.set_texture_from_cropped_image();
+        let full_face = &mut self.faces[self.face_n];
+        if let Data::Ready { face, .. } = &mut full_face.data {
+            face.cx += delta;
+            full_face.set_texture_from_cropped_image();
+        }
     }
 
     fn face_mv_y(&mut self, delta: f32) {
-        let face = &mut self.faces[self.face_n];
-        face.face.cy += delta;
-        face.set_texture_from_cropped_image();
+        let full_face = &mut self.faces[self.face_n];
+        if let Data::Ready { face, .. } = &mut full_face.data {
+            face.cy += delta;
+            full_face.set_texture_from_cropped_image();
+        }
     }
 
     fn sort(&mut self) {
-        self.faces.sort_by_cached_key(|f| (f.face.family.to_uppercase(), f.face.given.to_uppercase()));
+        self.faces.sort_by_cached_key(|f| match &f.data {
+            Data::Loading(_) => ("zzzzzz".into(), "zzzz".into()),
+            Data::Ready { face, .. } => (face.family.to_uppercase(), face.given.to_uppercase()),
+        })
+
     }
 
     fn save_and_regenerate(&self) -> face::Result<()> {
@@ -143,23 +154,49 @@ impl eframe::App for App {
     }
 }
 
+enum Data {
+    Loading(mpsc::Receiver<face::Result<Data>>),
+    Ready {
+        face: FaceInImage,
+        image: DynamicImage,
+    },
+}
+
 pub struct Face {
     pub path: PathBuf,
-    pub face: FaceInImage,
-    pub image: DynamicImage,
-    pub texture: TextureHandle,
+    data: Data,
+    texture: TextureHandle,
+}
+
+fn load_face_data(path: PathBuf) -> face::Result<Data> {
+    let image = image::open(&path)?;
+    let face = FaceInImage::from_path_or_default_for(&path, image.width() as f32, image.height() as f32)?;
+    Ok(Data::Ready { face, image })
 }
 
 impl Face {
 
     fn load(path: impl AsRef<Path>, cc: &CreationContext) -> face::Result<Face> {
-        let image = image::open(&path)?;
-        let face = FaceInImage::from_path_or_default_for(&path, image.width() as f32, image.height() as f32)?;
+        let (tx, rx) = mpsc::channel();
+        let owned_path = path.as_ref().to_owned();
         let texture_name = path.as_ref().to_string_lossy().to_string();
-        let cropped_image = crop(&image, &face);
-        let data = adapt_for_texture(&cropped_image);
-        let texture = cc.egui_ctx.load_texture(&texture_name, data, egui::TextureOptions::default());
-        Ok(Face { face, image, texture, path: path.as_ref().into() })
+        let dummy_image = ColorImage::new([400,500], Color32::GRAY);
+        let texture = cc.egui_ctx.load_texture(&texture_name, dummy_image, egui::TextureOptions::default());
+        std::thread::spawn(move || { tx.send(load_face_data(owned_path)) });
+        Ok(Face {
+            path: path.as_ref().into(),
+            data: Data::Loading(rx),
+            texture,
+        })
+    }
+
+    fn install_data(&mut self, data: Data) {
+        if let Data::Ready { ref face, ref image } = data {
+            let cropped_image = crop(image, face);
+            let image_data = adapt_for_texture(&cropped_image);
+            self.texture.set(image_data, egui::TextureOptions::default());
+            self.data = data;
+        }
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, selected: bool) {
@@ -169,39 +206,71 @@ impl Face {
             .show(ui, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.set_width(w / 6.5);
-                    ui.vertical(|ui| {
+                    ui.vertical_centered(|ui| {
                         let w = ui.available_width();
                         ui.add(egui::Image::new(&self.texture)
                                .max_size(Vec2 { x: w, y: w * ASPECT_RATIO }));
                     });
-                    ui.horizontal(|ui| {
-                        ui.label("prénom : ");
-                        ui.text_edit_singleline(&mut self.face.given);
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label("nom : ");
-                        ui.text_edit_singleline(&mut self.face.family);
-                    });
+                    match &mut self.data {
+                        Data::Ready { face, .. } => {
+                            if selected {
+                                ui.horizontal(|ui| {
+                                    ui.label("prénom : ");
+                                    ui.text_edit_singleline(&mut face.given);
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label("nom : ");
+                                    ui.text_edit_singleline(&mut face.family);
+                                });
+                            } else {
+                                ui.label(face.given.clone());
+                                ui.label(face.family.clone());
+                            }
+                        }
+                        Data::Loading(rx) => {
+                            ctx.request_repaint_after(std::time::Duration::from_millis(10));
+                            match rx.try_recv() {
+                                Ok(Ok(d)) => self.install_data(d),
+                                Ok(Err(face::Error::FaceNotLoaded)) => (),
+                                x => (),
+                            }
+                        }
+                    }
                 });
             });
     }
 
     pub fn rotate(&mut self, d_rot: i8) {
-        self.face.rot = (self.face.rot + d_rot).rem_euclid(4);
-        self.set_texture_from_cropped_image();
+        if let Data::Ready { face, .. } = &mut self.data {
+            face.rot = (face.rot + d_rot).rem_euclid(4);
+            self.set_texture_from_cropped_image();
+        }
     }
 
     pub fn set_texture_from_cropped_image(&mut self) {
-        let cropped_image = crop(&self.image, &self.face);
-        let data = adapt_for_texture(&cropped_image);
-        self.texture.set(data, TextureOptions::default());
+        if let Data::Ready { face, image } = &mut self.data {
+            let cropped_image = crop(image, face);
+            let data = adapt_for_texture(&cropped_image);
+            self.texture.set(data, TextureOptions::default());
+        }
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {
-        crop(&self.image, &self.face).as_bytes().to_owned()
+        match &self.data {
+            Data::Ready { face, image } => crop(image, face).as_bytes().to_owned(),
+            Data::Loading(_) => vec![],
+        }
     }
 
-    pub fn save_metadata(&self) -> face::Result<()> { self.face.embed_in_jpeg(&self.path) }
+    pub fn save_metadata(&self) -> face::Result<()> {
+        match &self.data {
+            Data::Ready { face, .. } => Ok(face.embed_in_jpeg(&self.path)?),
+            Data::Loading(_) => Err(face::Error::FaceNotLoaded)
+        }
+
+
+
+    }
 }
 
 pub fn crop(image: &DynamicImage, &FaceInImage { cx, cy, w, rot, .. }: &FaceInImage) -> DynamicImage {
@@ -243,14 +312,15 @@ fn write_many_face_images(faces: &[Face], dir: impl AsRef<Path>) -> face::Result
 
 /// Save one cropped face in its own image file in `dir`. Assumes `dir` exists.
 fn write_one_face_image(f: &Face, dir: impl AsRef<Path>) -> face::Result<()> {
-    let filename = format!("{} @ {}.jpg", &f.face.given, &f.face.family);
+    let face = if let Data::Ready { face, .. } = &f.data {face} else { return Err(face::Error::FaceNotLoaded)};
+    let filename = format!("{} @ {}.jpg", &face.given, &face.family);
     let path = dir.as_ref().join(&*filename);
     let file = &mut File::create(path)?;
     let mut encoder = JpegEncoder::new(file);
     encoder.encode(
         &f.as_bytes(),
-        f.face.w as u32,
-        f.face.h() as u32,
+        face.w as u32,
+        face.h() as u32,
         image::ExtendedColorType::Rgb8
     ).unwrap();
     Ok(())
