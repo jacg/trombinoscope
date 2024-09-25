@@ -104,10 +104,10 @@ impl App {
             key!{ArrowLeft  (NONE)  { self.face_mv_x( 30.0); }}
             key!{ArrowDown  (NONE)  { self.face_mv_y(-30.0); }}
             key!{ArrowUp    (NONE)  { self.face_mv_y( 30.0); }}
-            key!{Space      (NONE)  { self.face_select(Delta::R(1)); }}
-            key!{Backspace  (NONE)  { self.face_select(Delta::L(1)); }}
-            key!{Space      (SHIFT) { self.face_select(Delta::R(6)); }}
-            key!{Backspace  (SHIFT) { self.face_select(Delta::L(6)); }}
+            key!{Space      (NONE)  { self.face_select( 1); }}
+            key!{Backspace  (NONE)  { self.face_select(-1); }}
+            key!{Space      (SHIFT) { self.face_select( 6); }}
+            key!{Backspace  (SHIFT) { self.face_select(-6); }}
             key!{S          (CTRL)  { self.save_and_regenerate(); }}
 
         });
@@ -117,7 +117,7 @@ impl App {
         self.faces.get_mut(self.face_n).unwrap().rotate(d_rot);
     }
 
-    fn face_select(&mut self, delta: Delta) {
+    fn face_select(&mut self, delta: isize) {
         self.face_n = move_index_by(self.face_n, delta, self.faces.len());
     }
 
@@ -191,19 +191,8 @@ impl CropEgui {
     pub fn save_metadata(&self) -> face::Result<()> { self.face.embed_in_jpeg(&self.path) }
 }
 
-
-
-enum Delta {
-    R(usize),
-    L(usize),
-}
-
-fn move_index_by(index: usize, delta: Delta, size: usize) -> usize {
-    match delta {
-        Delta::R(d) => index.wrapping_add(       d),
-        Delta::L(d) => index.wrapping_add(size - d),
-    }.rem_euclid(size)
-
+fn move_index_by(index: usize, delta: isize, size: usize) -> usize {
+    (index as isize + delta).rem_euclid(size as _) as _
 }
 
 impl eframe::App for App {
