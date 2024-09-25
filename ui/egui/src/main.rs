@@ -32,18 +32,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 struct App {
     dirs: Dirs,
-    faces: Vec<CropEgui>,
+    faces: Vec<Face>,
     face_n: usize,
 }
 
-fn load_face(path: impl AsRef<Path>, cc: &CreationContext) -> face::Result<CropEgui> {
+fn load_face(path: impl AsRef<Path>, cc: &CreationContext) -> face::Result<Face> {
     let image = image::open(&path)?;
     let face = FaceInImage::from_path_or_default_for(&path, image.width() as f32, image.height() as f32)?;
     let texture_name = path.as_ref().to_string_lossy().to_string();
     let cropped_image = crop(&image, &face);
     let data = crop_image_for_texture(&cropped_image);
     let texture = cc.egui_ctx.load_texture(&texture_name, data, egui::TextureOptions::default());
-    Ok(CropEgui { face, image, texture, path: path.as_ref().into() })
+    Ok(Face { face, image, texture, path: path.as_ref().into() })
 }
 
 pub fn crop(image: &DynamicImage, &FaceInImage { cx, cy, w, rot, .. }: &FaceInImage) -> DynamicImage {
@@ -160,19 +160,19 @@ pub fn crop_image_for_texture(cropped: &DynamicImage) -> egui::ColorImage {
 
 /// Store the location and name of each face in the JPEG segment of the image
 /// containing the face
-fn save_many_face_metadata(faces: &[CropEgui]) -> face::Result<()> {
+fn save_many_face_metadata(faces: &[Face]) -> face::Result<()> {
     for face in faces { face.save_metadata()?; }
     Ok(())
 }
 
 /// Save each cropped face in its own image file in `dir`. Assumes `dir` exists.
-fn write_many_face_images(faces: &[CropEgui], dir: impl AsRef<Path>) -> face::Result<()> {
+fn write_many_face_images(faces: &[Face], dir: impl AsRef<Path>) -> face::Result<()> {
     for face in faces { write_one_face_image(face, &dir)?; }
     Ok(())
 }
 
 /// Save one cropped face in its own image file in `dir`. Assumes `dir` exists.
-fn write_one_face_image(f: &CropEgui, dir: impl AsRef<Path>) -> face::Result<()> {
+fn write_one_face_image(f: &Face, dir: impl AsRef<Path>) -> face::Result<()> {
     let filename = format!("{} @ {}.jpg", &f.face.given, &f.face.family);
     let path = dir.as_ref().join(&*filename);
     let file = &mut File::create(path)?;
@@ -187,7 +187,7 @@ fn write_one_face_image(f: &CropEgui, dir: impl AsRef<Path>) -> face::Result<()>
     Ok(())
 }
 
-impl CropEgui {
+impl Face {
     pub fn save_metadata(&self) -> face::Result<()> { self.face.embed_in_jpeg(&self.path) }
 }
 
@@ -204,14 +204,14 @@ impl eframe::App for App {
     }
 }
 
-pub (crate) struct CropEgui {
+pub (crate) struct Face {
     pub path: PathBuf,
     pub face: FaceInImage,
     pub image: DynamicImage,
     pub texture: TextureHandle,
 }
 
-impl CropEgui {
+impl Face {
     pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, selected: bool) {
         let w = ctx.available_rect().width();
         egui::Frame::none()
@@ -243,12 +243,12 @@ impl CropEgui {
     }
 
     pub fn set_texture_from_cropped_image(&mut self) {
-        let cropped_image = crate::crop(&self.image, &self.face);
+        let cropped_image = crop(&self.image, &self.face);
         let data = crop_image_for_texture(&cropped_image);
         self.texture.set(data, TextureOptions::default());
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {
-        crate::crop(&self.image, &self.face).as_bytes().to_owned()
+        crop(&self.image, &self.face).as_bytes().to_owned()
     }
 }
