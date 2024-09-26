@@ -2,6 +2,8 @@
 // TODO add class name to header
 // TODO display help
 // TODO mouse UI ?
+// TODO infer names from filename if no metadata ?
+// TODO option to rename files from metadata names ?
 
 use std::{fs::File, path::{Path, PathBuf}, sync::mpsc};
 
