@@ -8,7 +8,7 @@
 use std::{fs::File, path::{Path, PathBuf}, sync::mpsc};
 
 use eframe::{egui, CreationContext};
-use egui::{Color32, ColorImage, Context, Key, TextureHandle, TextureOptions, Ui, Vec2};
+use egui::{Color32, Frame, ColorImage, Context, Key, TextureHandle, TextureOptions, Ui, Vec2};
 use image::{codecs::jpeg::JpegEncoder, DynamicImage};
 
 use face::{FaceInImage, ASPECT_RATIO};
@@ -227,8 +227,8 @@ impl Face {
         let top_margin = 10.0;
         ui.vertical_centered(|ui| {
             ui.set_width((w / 6.6).min((h-top_margin) / 5.0));
-            egui::Frame::none()
-                .fill(if selected {egui::Color32::RED} else { egui::Color32::BLACK })
+            Frame::none()
+                .fill(if selected && editing == What::Face {Color32::YELLOW} else { Color32::BLACK })
                 .inner_margin(3.0)
                 .show(ui, |ui| {
                     ui.vertical_centered(|ui| {
@@ -240,14 +240,19 @@ impl Face {
             match &mut self.data {
                 Data::Ready { face, .. } => {
                     if selected && editing == What::Name {
-                        ui.horizontal(|ui| {
-                            ui.label("prénom : ");
-                            ui.text_edit_singleline(&mut face.given);
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label("nom : ");
-                            ui.text_edit_singleline(&mut face.family);
-                        });
+                        Frame::none()
+                            .fill(Color32::YELLOW)
+                            .inner_margin(3.0)
+                            .show(ui, |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label("prénom : ");
+                                    ui.text_edit_singleline(&mut face.given);
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label("nom : ");
+                                    ui.text_edit_singleline(&mut face.family);
+                                });
+                            });
                     } else {
                         ui.label(face.given.clone());
                         ui.label(face.family.clone());
@@ -352,7 +357,7 @@ fn write_one_face_image(f: &Face, dir: impl AsRef<Path>) -> face::Result<()> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum What { Face, Name }
+pub enum What { Face, Name }
 
 impl What {
     fn toggle(&mut self) {
