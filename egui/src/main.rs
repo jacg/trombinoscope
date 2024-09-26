@@ -1,7 +1,9 @@
-// TODO fix highlighting of current face
-// TODO asynchronous I/O
-// TODO fine face controls
-// TODO add scroll or make all faces fit on screen
+// TODO asynchronous writing
+// TODO add class name to header
+// TODO display help
+// TODO mouse UI ?
+// TODO sort when loading finished
+// TODO focus follow selected when sorting
 
 use std::{fs::File, path::{Path, PathBuf}, sync::mpsc};
 
