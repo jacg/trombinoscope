@@ -211,43 +211,44 @@ impl Face {
 
     pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, selected: bool) {
         let w = ctx.available_rect().width();
-        egui::Frame::none()
-            .fill(if selected {egui::Color32::RED} else { egui::Color32::BLACK })
-            .show(ui, |ui| {
-                ui.vertical_centered(|ui| {
+        ui.vertical_centered(|ui| {
+            egui::Frame::none()
+                .fill(if selected {egui::Color32::RED} else { egui::Color32::BLACK })
+                .inner_margin(3.0)
+                .show(ui, |ui| {
                     ui.set_width(w / 6.5);
                     ui.vertical_centered(|ui| {
                         let w = ui.available_width();
                         ui.add(egui::Image::new(&self.texture)
                                .max_size(Vec2 { x: w, y: w * ASPECT_RATIO }));
                     });
-                    match &mut self.data {
-                        Data::Ready { face, .. } => {
-                            if selected {
-                                ui.horizontal(|ui| {
-                                    ui.label("prénom : ");
-                                    ui.text_edit_singleline(&mut face.given);
-                                });
-                                ui.horizontal(|ui| {
-                                    ui.label("nom : ");
-                                    ui.text_edit_singleline(&mut face.family);
-                                });
-                            } else {
-                                ui.label(face.given.clone());
-                                ui.label(face.family.clone());
-                            }
-                        }
-                        Data::Loading(rx) => {
-                            ctx.request_repaint_after(std::time::Duration::from_millis(10));
-                            match rx.try_recv() {
-                                Ok(Ok(d)) => self.install_data(d),
-                                Ok(Err(face::Error::FaceNotLoaded)) => (),
-                                x => (),
-                            }
-                        }
-                    }
                 });
-            });
+            match &mut self.data {
+                Data::Ready { face, .. } => {
+                    if selected {
+                        ui.horizontal(|ui| {
+                            ui.label("prénom : ");
+                            ui.text_edit_singleline(&mut face.given);
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("nom : ");
+                            ui.text_edit_singleline(&mut face.family);
+                        });
+                    } else {
+                        ui.label(face.given.clone());
+                        ui.label(face.family.clone());
+                    }
+                }
+                Data::Loading(rx) => {
+                    ctx.request_repaint_after(std::time::Duration::from_millis(10));
+                    match rx.try_recv() {
+                        Ok(Ok(d)) => self.install_data(d),
+                        Ok(Err(face::Error::FaceNotLoaded)) => (),
+                        x => (),
+                    }
+                }
+            }
+        });
     }
 
     pub fn rotate(&mut self, d_rot: i8) {
