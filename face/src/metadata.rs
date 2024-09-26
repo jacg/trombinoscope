@@ -29,14 +29,14 @@ impl FaceInImage {
 
     /// Construct default guess of face description for image with given width
     /// and height
-    pub fn default_for(width: f32, height: f32) -> Self {
+    pub fn default_for(width: f32, height: f32, path: impl AsRef<Path>) -> Self {
         let (h, w, rot) = {
             let (w, h) = (width, height);
             if w < h {(w, h, 0)} else {(h, w, 3)}
         };
         Self {
-            given:  String::default(),
-            family: String::default(),
+            given: "Prénom".into(),
+            family: path.as_ref().file_name().map_or_else(|| "XXX".to_string(), |o| o.to_string_lossy().into()),
             cx: w / 3.0,
             cy: h / 4.0,
             w:  w / 8.0,
@@ -45,11 +45,13 @@ impl FaceInImage {
     }
 
     /// Load image at `path`. If image contains face metadata, use it; otherwise
-    /// use `with` and `height` to guess where the face is.
+    /// use `with` and `height` to guess where the face is, and `path` to set a
+    /// non-empty name.
     pub fn from_path_or_default_for(path: impl AsRef<Path>, width: f32, height: f32) -> Result<Self> {
         Ok(match FaceInImage::from_jpeg_in_file(&path) {
             Ok(face) => face,
-            Err(Error::NoMetadataFound(_)) => FaceInImage::default_for(width, height),
+            Err(Error::NoMetadataFound(_)) => FaceInImage::default_for(width, height, path),
+            Err(Error::Bitcode(_)) => panic!("Old metadata ?"),
             err => err?,
         })
     }

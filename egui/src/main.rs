@@ -185,6 +185,7 @@ impl eframe::App for App {
     }
 }
 
+#[derive(Debug)]
 enum Data {
     Loading(mpsc::Receiver<face::Result<Data>>),
     Ready {
@@ -276,7 +277,7 @@ impl Face {
                     match rx.try_recv() {
                         Ok(Ok(d)) => { self.install_data(d); installed_data = true;},
                         Ok(Err(face::Error::FaceNotLoaded)) => (),
-                        x => (),
+                        _ => (),
                     }
                 }
             }
