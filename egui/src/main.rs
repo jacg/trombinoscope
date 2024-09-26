@@ -64,12 +64,16 @@ impl App {
 
     pub fn show(&mut self, ui: &mut Ui, ctx: &Context) {
         ui.heading("Trombinoscope");
+        let mut sort = false;
         egui::Grid::new("face grid").show(ui, |ui| {
             for (n, face) in self.faces.iter_mut().enumerate() {
-                face.show(ui, ctx, n == self.face_n, self.editing);
+                if face.show(ui, ctx, n == self.face_n, self.editing) {
+                    sort = true;
+                }
                 if n % 6 == 5 { ui.end_row() }
             }
         });
+        if sort {self. sort();}
     }
 
     fn handle_keys(&mut self, ctx: &Context) {
@@ -226,10 +230,11 @@ impl Face {
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, selected: bool, editing: What) {
+    pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, selected: bool, editing: What) -> bool {
         let w = ctx.available_rect().width();
         let h = ctx.available_rect().height();
         let top_margin = 10.0;
+        let mut installed_data = false;
         ui.vertical_centered(|ui| {
             ui.set_width((w / 6.6).min((h-top_margin) / 5.0));
             Frame::none()
@@ -266,13 +271,14 @@ impl Face {
                 Data::Loading(rx) => {
                     ctx.request_repaint_after(std::time::Duration::from_millis(10));
                     match rx.try_recv() {
-                        Ok(Ok(d)) => self.install_data(d),
+                        Ok(Ok(d)) => { self.install_data(d); installed_data = true;},
                         Ok(Err(face::Error::FaceNotLoaded)) => (),
                         x => (),
                     }
                 }
             }
         });
+        installed_data
     }
 
     pub fn rotate(&mut self, d_rot: i8) {
