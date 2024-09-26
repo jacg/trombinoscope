@@ -1,5 +1,4 @@
 // TODO fix highlighting of current face
-// TODO stop typing names being picked up as crop commands
 // TODO asynchronous I/O
 // TODO fine face controls
 // TODO add scroll or make all faces fit on screen
@@ -39,6 +38,7 @@ struct App {
     dirs: Dirs,
     faces: Vec<Face>,
     face_n: usize,
+    editing: What,
 }
 
 impl App {
@@ -58,6 +58,7 @@ impl App {
             dirs,
             faces,
             face_n: 0,
+            editing: What::Face,
         };
         it.sort();
         it
@@ -67,7 +68,7 @@ impl App {
         ui.heading("Trombinoscope");
         egui::Grid::new("face grid").show(ui, |ui| {
             for (n, face) in self.faces.iter_mut().enumerate() {
-                face.show(ui, ctx, n == self.face_n);
+                face.show(ui, ctx, n == self.face_n, self.editing);
                 if n % 6 == 5 { ui.end_row() }
             }
         });
@@ -81,23 +82,30 @@ impl App {
                     if i.key_pressed(Key::$key) && i.modifiers.matches_exact($(Modifiers::$mod)|*) $body
                 };
             }
-            key!{Q          (CTRL)  { std::process::exit(0) }} // TODO exit less brutally
-            key!{R          (NONE)  { self.face_rotate( 1 ); }}
-            key!{L          (NONE)  { self.face_rotate(-1 ); }}
-            key!{G          (NONE)  { self.face_zoom(-30.0); }}
-            key!{P          (NONE)  { self.face_zoom( 30.0); }}
-            key!{G          (CTRL)  { self.face_zoom(- 3.0); }}
-            key!{P          (CTRL)  { self.face_zoom(  3.0); }}
-            key!{ArrowRight (NONE)  { self.face_mv_x(-30.0); }}
-            key!{ArrowLeft  (NONE)  { self.face_mv_x( 30.0); }}
-            key!{ArrowDown  (NONE)  { self.face_mv_y(-30.0); }}
-            key!{ArrowUp    (NONE)  { self.face_mv_y( 30.0); }}
-            key!{Space      (NONE)  { self.face_select( 1); }}
-            key!{Backspace  (NONE)  { self.face_select(-1); }}
-            key!{Space      (SHIFT) { self.face_select( 6); }}
-            key!{Backspace  (SHIFT) { self.face_select(-6); }}
+            if self.editing == What::Face {
+                key!{R          (NONE)  { self.face_rotate( 1 ); }}
+                key!{L          (NONE)  { self.face_rotate(-1 ); }}
+                key!{G          (NONE)  { self.face_zoom(-30.0); }}
+                key!{P          (NONE)  { self.face_zoom( 30.0); }}
+                key!{G          (CTRL)  { self.face_zoom(- 3.0); }}
+                key!{P          (CTRL)  { self.face_zoom(  3.0); }}
+                key!{ArrowRight (NONE)  { self.face_mv_x(-30.0); }}
+                key!{ArrowLeft  (NONE)  { self.face_mv_x( 30.0); }}
+                key!{ArrowDown  (NONE)  { self.face_mv_y(-30.0); }}
+                key!{ArrowUp    (NONE)  { self.face_mv_y( 30.0); }}
+                key!{ArrowRight (CTRL)  { self.face_mv_x(- 3.0); }}
+                key!{ArrowLeft  (CTRL)  { self.face_mv_x(  3.0); }}
+                key!{ArrowDown  (CTRL)  { self.face_mv_y(- 3.0); }}
+                key!{ArrowUp    (CTRL)  { self.face_mv_y(  3.0); }}
+                key!{Space      (NONE)  { self.face_select( 1); }}
+                key!{Backspace  (NONE)  { self.face_select(-1); }}
+                key!{Space      (SHIFT) { self.face_select( 6); }}
+                key!{Backspace  (SHIFT) { self.face_select(-6); }}
+            }
             key!{S          (CTRL)  { self.sort(); self.save_and_regenerate(); }}
+            key!{Q          (CTRL)  { std::process::exit(0) }} // TODO exit less brutally
             key!{O          (CTRL)  { self.sort(); }}
+            key!{Escape     (NONE)  { self.toggle_edit(); }}
         });
     }
 
@@ -140,6 +148,8 @@ impl App {
         })
 
     }
+
+    fn toggle_edit(&mut self) { self.editing.toggle() }
 
     fn save_and_regenerate(&self) -> face::Result<()> {
         save_many_face_metadata(&self.faces)?;
@@ -209,7 +219,7 @@ impl Face {
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, selected: bool) {
+    pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, selected: bool, editing: What) {
         let w = ctx.available_rect().width();
         let h = ctx.available_rect().height();
         let top_margin = 10.0;
@@ -227,7 +237,7 @@ impl Face {
                 });
             match &mut self.data {
                 Data::Ready { face, .. } => {
-                    if selected {
+                    if selected && editing == What::Name {
                         ui.horizontal(|ui| {
                             ui.label("prénom : ");
                             ui.text_edit_singleline(&mut face.given);
@@ -337,4 +347,17 @@ fn write_one_face_image(f: &Face, dir: impl AsRef<Path>) -> face::Result<()> {
         image::ExtendedColorType::Rgb8
     ).unwrap();
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum What { Face, Name }
+
+impl What {
+    fn toggle(&mut self) {
+        use What::*;
+        *self = match self {
+            Face => Name,
+            Name => Face,
+        }
+    }
 }
