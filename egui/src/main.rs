@@ -107,6 +107,10 @@ impl App {
                 key!{Space      (SHIFT) { self.face_select( 6); }}
                 key!{Backspace  (SHIFT) { self.face_select(-6); }}
             }
+            key!{ArrowRight (ALT)   { self.face_select( 1); }}
+            key!{ArrowLeft  (ALT)   { self.face_select(-1); }}
+            key!{ArrowDown  (ALT)   { self.face_select( 6); }}
+            key!{ArrowUp    (ALT)   { self.face_select(-6); }}
             key!{S          (CTRL)  { self.save_and_regenerate(); }}
             key!{Q          (CTRL)  { std::process::exit(0) }} // TODO exit less brutally
             key!{Escape     (NONE)  { self.toggle_edit(); }}
