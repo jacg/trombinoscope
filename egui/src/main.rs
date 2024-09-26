@@ -211,12 +211,14 @@ impl Face {
 
     pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, selected: bool) {
         let w = ctx.available_rect().width();
+        let h = ctx.available_rect().height();
+        let top_margin = 10.0;
         ui.vertical_centered(|ui| {
+            ui.set_width((w / 6.6).min((h-top_margin) / 5.0));
             egui::Frame::none()
                 .fill(if selected {egui::Color32::RED} else { egui::Color32::BLACK })
                 .inner_margin(3.0)
                 .show(ui, |ui| {
-                    ui.set_width(w / 6.5);
                     ui.vertical_centered(|ui| {
                         let w = ui.available_width();
                         ui.add(egui::Image::new(&self.texture)
