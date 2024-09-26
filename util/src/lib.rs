@@ -19,7 +19,7 @@ pub fn filename_to_given_family(path: impl AsRef<Path>) -> Option<(String, Strin
 
 /// Make sure given directory exists and is empty, deleting previous contents
 pub fn ensure_empty_dir(dir: impl AsRef<Path>) -> std::io::Result<()> {
-    let dir = dbg!(dir.as_ref().as_os_str());
+    let dir = dir.as_ref().as_os_str();
     std::process::Command::new("rm")   .arg("-rf").arg(dir).output()?;
     std::process::Command::new("mkdir").arg("-p" ).arg(dir).output()?;
     Ok(())
