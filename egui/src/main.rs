@@ -67,9 +67,10 @@ impl App {
     pub fn show(&mut self, ui: &mut Ui, ctx: &Context) {
         ui.heading("Trombinoscope");
         let mut sort = false;
+        let n_rows = self.faces.len() / 6 + 1;
         egui::Grid::new("face grid").show(ui, |ui| {
             for (n, face) in self.faces.iter_mut().enumerate() {
-                if face.show(ui, ctx, n == self.face_n, self.editing) {
+                if face.show(ui, ctx, n == self.face_n, self.editing, n_rows) {
                     sort = true;
                 }
                 if n % 6 == 5 { ui.end_row() }
@@ -232,13 +233,13 @@ impl Face {
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, selected: bool, editing: What) -> bool {
+    pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, selected: bool, editing: What, n_rows: usize) -> bool {
         let w = ctx.available_rect().width();
         let h = ctx.available_rect().height();
         let top_margin = 10.0;
         let mut installed_data = false;
         ui.vertical_centered(|ui| {
-            ui.set_width((w / 6.6).min((h-top_margin) / 5.0));
+            ui.set_width((w / 6.6).min((h-top_margin) / (n_rows as f32 * 5.0 / 3.0)));
             Frame::none()
                 .fill(if selected && editing == What::Face {Color32::YELLOW} else { Color32::BLACK })
                 .inner_margin(3.0)
