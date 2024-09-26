@@ -2,8 +2,6 @@
 // TODO add class name to header
 // TODO display help
 // TODO mouse UI ?
-// TODO sort when loading finished
-// TODO focus follow selected when sorting
 
 use std::{fs::File, path::{Path, PathBuf}, sync::mpsc};
 
@@ -56,14 +54,12 @@ impl App {
             .into_iter()
             .map(move |path| { Face::load(path, cc, tx.clone()).unwrap() })
             .collect();
-        let mut it = Self {
+        Self {
             dirs,
             faces,
             face_n: 0,
             editing: What::Face,
-        };
-        it.sort();
-        it
+        }
     }
 
     pub fn show(&mut self, ui: &mut Ui, ctx: &Context) {
@@ -104,9 +100,8 @@ impl App {
                 key!{Space      (SHIFT) { self.face_select( 6); }}
                 key!{Backspace  (SHIFT) { self.face_select(-6); }}
             }
-            key!{S          (CTRL)  { self.sort(); self.save_and_regenerate(); }}
+            key!{S          (CTRL)  { self.save_and_regenerate(); }}
             key!{Q          (CTRL)  { std::process::exit(0) }} // TODO exit less brutally
-            key!{O          (CTRL)  { self.sort(); }}
             key!{Escape     (NONE)  { self.toggle_edit(); }}
         });
     }
@@ -144,14 +139,24 @@ impl App {
     }
 
     fn sort(&mut self) {
+        // Identify which face was selected before sorting, by its path
+        let selected_path = self.faces[self.face_n].path.clone();
         self.faces.sort_by_cached_key(|f| match &f.data {
             Data::Loading(_) => ("zzzzzz".into(), "zzzz".into()),
             Data::Ready { face, .. } => (face.family.to_uppercase(), face.given.to_uppercase()),
-        })
-
+        });
+        // Re-focus on the face selected before solting
+        for (n, face) in self.faces.iter().enumerate() {
+            if face.path == *selected_path { self.face_n = n; }
+        }
     }
 
-    fn toggle_edit(&mut self) { self.editing.toggle() }
+    fn toggle_edit(&mut self) {
+        if self.editing == What::Name {
+            self.sort();
+        }
+        self.editing.toggle()
+    }
 
     fn save_and_regenerate(&self) -> face::Result<()> {
         save_many_face_metadata(&self.faces)?;
