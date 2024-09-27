@@ -118,19 +118,13 @@ impl App {
         });
     }
 
-    fn face_rotate(&mut self, d_rot: i8) {
-        self.faces.get_mut(self.face_n).unwrap().rotate(d_rot);
-    }
+    fn face_rotate (&mut self, d_rot: i8)        { self.faces[self.face_n].rotate(d_rot); }
+    fn face_zoom   (&mut self, delta: f32)       { self.faces[self.face_n].zoom(delta); }
+    fn face_mv     (&mut self, dx: f32, dy: f32) { self.faces[self.face_n].mv(dx, dy); }
 
     fn face_select(&mut self, delta: isize) {
         self.face_n = move_index_by(self.face_n, delta, self.faces.len());
     }
-
-    fn face_zoom(&mut self, delta: f32) {
-        self.faces.get_mut(self.face_n).unwrap().zoom(delta);
-    }
-
-    fn face_mv(&mut self, dx: f32, dy: f32) { self.faces[self.face_n].mv(dx, dy); }
 
     fn sort(&mut self) {
         // Identify which face was selected before sorting, by its path
@@ -241,7 +235,8 @@ impl Face {
                         );
                         if response.dragged() {
                             let Vec2 { x, y } = response.drag_motion();
-                            self.mv(-x, -y);
+                            if response.dragged_by(egui::PointerButton::Primary)   { self.mv(-x, -y); }
+                            if response.dragged_by(egui::PointerButton::Secondary) { self.zoom(y); }
                         }
                     });
                 });
