@@ -197,19 +197,22 @@ impl Face {
                     if response.dragged_by(PointerButton::Primary)   { self.mv(-x, -y); }
                     if response.dragged_by(PointerButton::Secondary) { self.zoom(y); }
                 }
-                if response.is_pointer_button_down_on() {
+                //if response.is_pointer_button_down_on() {
+                if response.hovered() {
                     ctx.input(|i| {
-                        let mut delta = 50.0;
-                        if i.modifiers.ctrl  { delta /= 5.0; }
-                        if i.modifiers.shift { delta *= 3.0; }
-                        if i.key_pressed(Key::R) { self.rotate( 1); }
-                        if i.key_pressed(Key::L) { self.rotate(-1); }
-                        if i.key_pressed(Key::G) { self.zoom(-delta); }
-                        if i.key_pressed(Key::P) { self.zoom( delta); }
-                        if i.key_pressed(Key::ArrowRight) { self.mv(-delta, 0.0); }
-                        if i.key_pressed(Key::ArrowLeft ) { self.mv( delta, 0.0); }
-                        if i.key_pressed(Key::ArrowDown ) { self.mv( 0.0, -delta); }
-                        if i.key_pressed(Key::ArrowUp   ) { self.mv( 0.0,  delta); }
+                        let mut delta = 5.0;
+                        if i.modifiers.shift { delta *= 5.0; }
+                        if i.modifiers.ctrl {
+                            if i.key_pressed(Key::ArrowRight) { self.rotate( 1); }
+                            if i.key_pressed(Key::ArrowLeft ) { self.rotate(-1); }
+                            if i.key_pressed(Key::ArrowDown ) { self.zoom( delta); }
+                            if i.key_pressed(Key::ArrowUp   ) { self.zoom(-delta); }
+                        } else {
+                            if i.key_pressed(Key::ArrowRight) { self.mv(-delta, 0.0); }
+                            if i.key_pressed(Key::ArrowLeft ) { self.mv( delta, 0.0); }
+                            if i.key_pressed(Key::ArrowDown ) { self.mv( 0.0, -delta); }
+                            if i.key_pressed(Key::ArrowUp   ) { self.mv( 0.0,  delta); }
+                        }
                     });
                 }
             });
