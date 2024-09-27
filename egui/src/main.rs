@@ -40,7 +40,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 struct App {
     dirs: Dirs,
     faces: Vec<Face>,
-    face_n: usize,
 }
 
 impl App {
@@ -59,7 +58,6 @@ impl App {
         Self {
             dirs,
             faces,
-            face_n: 0,
         }
     }
 
@@ -92,16 +90,10 @@ impl App {
     }
 
     fn sort(&mut self) {
-        // Identify which face was selected before sorting, by its path
-        let selected_path = self.faces[self.face_n].path.clone();
         self.faces.sort_by_cached_key(|f| match &f.data {
             Data::Loading(_) => ("zzzzzz".into(), "zzzz".into()),
             Data::Ready { face, .. } => (face.family.to_uppercase(), face.given.to_uppercase()),
         });
-        // Re-focus on the face selected before solting
-        for (n, face) in self.faces.iter().enumerate() {
-            if face.path == *selected_path { self.face_n = n; }
-        }
     }
 
     fn save_and_regenerate(&self) -> face::Result<()> {
