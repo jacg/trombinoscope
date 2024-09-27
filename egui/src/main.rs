@@ -8,12 +8,12 @@
 use std::{fs::File, path::{Path, PathBuf}, sync::mpsc};
 
 use eframe::{egui, CreationContext};
-use egui::{Color32, ColorImage, Context, Frame, Key, Response, Sense, TextureHandle, TextureOptions, Ui, Vec2};
+use egui::{Color32, ColorImage, Context, Frame, Key, Sense, TextureHandle, TextureOptions, Ui, Vec2};
 use image::{codecs::jpeg::JpegEncoder, DynamicImage};
 
 use face::{FaceInImage, ASPECT_RATIO};
 use render::trombinoscope;
-use util::{ensure_empty_dir, find_jpgs_in_dir, move_index_by, Dirs};
+use util::{ensure_empty_dir, find_jpgs_in_dir, Dirs};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 
@@ -41,7 +41,6 @@ struct App {
     dirs: Dirs,
     faces: Vec<Face>,
     face_n: usize,
-    editing: What,
 }
 
 impl App {
@@ -61,7 +60,6 @@ impl App {
             dirs,
             faces,
             face_n: 0,
-            editing: What::Face,
         }
     }
 
@@ -71,7 +69,7 @@ impl App {
         let n_rows = self.faces.len() / 6 + 1;
         egui::Grid::new("face grid").show(ui, |ui| {
             for (n, face) in self.faces.iter_mut().enumerate() {
-                if face.show(ui, ctx, n == self.face_n, self.editing, n_rows) {
+                if face.show(ui, ctx, n == self.face_n, n_rows) {
                     sort = true;
                 }
                 if n % 6 == 5 { ui.end_row() }
@@ -88,42 +86,9 @@ impl App {
                     if i.key_pressed(Key::$key) && i.modifiers.matches_exact($(Modifiers::$mod)|*) $body
                 };
             }
-            if self.editing == What::Face {
-                key!{R          (NONE)  { self.face_rotate( 1 ); }}
-                key!{L          (NONE)  { self.face_rotate(-1 ); }}
-                key!{G          (NONE)  { self.face_zoom(-30.0); }}
-                key!{P          (NONE)  { self.face_zoom( 30.0); }}
-                key!{G          (CTRL)  { self.face_zoom(- 3.0); }}
-                key!{P          (CTRL)  { self.face_zoom(  3.0); }}
-                key!{ArrowRight (NONE)  { self.face_mv(-30.0,   0.0); }}
-                key!{ArrowLeft  (NONE)  { self.face_mv( 30.0,   0.0); }}
-                key!{ArrowDown  (NONE)  { self.face_mv(  0.0, -30.0); }}
-                key!{ArrowUp    (NONE)  { self.face_mv(  0.0,  30.0); }}
-                key!{ArrowRight (CTRL)  { self.face_mv(- 3.0,   0.0); }}
-                key!{ArrowLeft  (CTRL)  { self.face_mv(  3.0,   0.0); }}
-                key!{ArrowDown  (CTRL)  { self.face_mv(  0.0, - 3.0); }}
-                key!{ArrowUp    (CTRL)  { self.face_mv(  0.0,   3.0); }}
-                key!{Space      (NONE)  { self.face_select( 1); }}
-                key!{Backspace  (NONE)  { self.face_select(-1); }}
-                key!{Space      (SHIFT) { self.face_select( 6); }}
-                key!{Backspace  (SHIFT) { self.face_select(-6); }}
-            }
-            key!{ArrowRight (SHIFT) { self.face_select( 1); }}
-            key!{ArrowLeft  (SHIFT) { self.face_select(-1); }}
-            key!{ArrowDown  (SHIFT) { self.face_select( 6); }}
-            key!{ArrowUp    (SHIFT) { self.face_select(-6); }}
-            key!{S          (CTRL)  { self.save_and_regenerate(); }}
-            key!{Q          (CTRL)  { std::process::exit(0) }} // TODO exit less brutally
-            key!{Escape     (NONE)  { self.toggle_edit(); }}
+            key!{S (CTRL)  { self.save_and_regenerate(); }}
+            key!{Q (CTRL)  { std::process::exit(0) }} // TODO exit less brutally
         });
-    }
-
-    fn face_rotate (&mut self, d_rot: i8)        { self.faces[self.face_n].rotate(d_rot); }
-    fn face_zoom   (&mut self, delta: f32)       { self.faces[self.face_n].zoom(delta); }
-    fn face_mv     (&mut self, dx: f32, dy: f32) { self.faces[self.face_n].mv(dx, dy); }
-
-    fn face_select(&mut self, delta: isize) {
-        self.face_n = move_index_by(self.face_n, delta, self.faces.len());
     }
 
     fn sort(&mut self) {
@@ -137,13 +102,6 @@ impl App {
         for (n, face) in self.faces.iter().enumerate() {
             if face.path == *selected_path { self.face_n = n; }
         }
-    }
-
-    fn toggle_edit(&mut self) {
-        if self.editing == What::Name {
-            self.sort();
-        }
-        self.editing.toggle()
     }
 
     fn save_and_regenerate(&self) -> face::Result<()> {
@@ -215,63 +173,45 @@ impl Face {
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, selected: bool, editing: What, n_rows: usize) -> bool {
+    pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, selected: bool, n_rows: usize) -> bool {
         let w = ctx.available_rect().width();
         let h = ctx.available_rect().height();
         let top_margin = 10.0;
-        let mut installed_data = false;
+        let mut request_sort = false;
         ui.vertical_centered(|ui| {
             ui.set_width((w / 6.6).min((h-top_margin) / (n_rows as f32 * 5.0 / 3.0)));
-            Frame::none()
-                .fill(if selected && editing == What::Face {Color32::YELLOW} else { Color32::BLACK })
-                .inner_margin(3.0)
-                .show(ui, |ui| {
-                    ui.vertical_centered(|ui| {
-                        let w = ui.available_width();
-                        let response = ui.add(
-                            egui::Image::new(&self.texture)
-                                .max_size(Vec2 { x: w, y: w * ASPECT_RATIO })
-                                .sense(Sense::click_and_drag())
-                        );
-                        if response.dragged() {
-                            let Vec2 { x, y } = response.drag_motion();
-                            if response.dragged_by(egui::PointerButton::Primary)   { self.mv(-x, -y); }
-                            if response.dragged_by(egui::PointerButton::Secondary) { self.zoom(y); }
-                        }
-                    });
-                });
+            ui.vertical_centered(|ui| {
+                let w = ui.available_width();
+                let response = ui.add(
+                    egui::Image::new(&self.texture)
+                        .max_size(Vec2 { x: w, y: w * ASPECT_RATIO })
+                        .sense(Sense::click_and_drag())
+                );
+                if response.dragged() {
+                    let Vec2 { x, y } = response.drag_motion();
+                    if response.dragged_by(egui::PointerButton::Primary)   { self.mv(-x, -y); }
+                    if response.dragged_by(egui::PointerButton::Secondary) { self.zoom(y); }
+                }
+            });
             match &mut self.data {
                 Data::Ready { face, .. } => {
-                    if selected && editing == What::Name {
-                        Frame::none()
-                            .fill(Color32::YELLOW)
-                            .inner_margin(3.0)
-                            .show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label("prénom : ");
-                                    ui.text_edit_singleline(&mut face.given);
-                                });
-                                ui.horizontal(|ui| {
-                                    ui.label("nom : ");
-                                    ui.text_edit_singleline(&mut face.family);
-                                });
-                            });
-                    } else {
-                        ui.label(face.given.clone());
-                        ui.label(face.family.clone());
-                    }
+                    if
+                        ui.text_edit_singleline(&mut face.given ).lost_focus() ||
+                        ui.text_edit_singleline(&mut face.family).lost_focus() {
+                            request_sort = true;
+                        }
                 }
                 Data::Loading(rx) => {
                     ctx.request_repaint_after(std::time::Duration::from_millis(10));
                     match rx.try_recv() {
-                        Ok(Ok(d)) => { self.install_data(d); installed_data = true;},
+                        Ok(Ok(d)) => { self.install_data(d); request_sort = true; }
                         Ok(Err(face::Error::FaceNotLoaded)) => (),
                         _ => (),
                     }
                 }
             }
         });
-        installed_data
+        request_sort
     }
 
     pub fn rotate(&mut self, d_rot: i8) {
@@ -371,17 +311,4 @@ fn write_one_face_image(f: &Face, dir: impl AsRef<Path>) -> face::Result<()> {
         image::ExtendedColorType::Rgb8
     ).unwrap();
     Ok(())
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum What { Face, Name }
-
-impl What {
-    fn toggle(&mut self) {
-        use What::*;
-        *self = match self {
-            Face => Name,
-            Name => Face,
-        }
-    }
 }
