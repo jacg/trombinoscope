@@ -8,7 +8,7 @@
 use std::{fs::File, path::{Path, PathBuf}, sync::mpsc};
 
 use eframe::{egui, CreationContext};
-use egui::{Color32, Frame, ColorImage, Context, Key, TextureHandle, TextureOptions, Ui, Vec2};
+use egui::{Color32, ColorImage, Context, Frame, Key, Response, Sense, TextureHandle, TextureOptions, Ui, Vec2};
 use image::{codecs::jpeg::JpegEncoder, DynamicImage};
 
 use face::{FaceInImage, ASPECT_RATIO};
@@ -95,14 +95,14 @@ impl App {
                 key!{P          (NONE)  { self.face_zoom( 30.0); }}
                 key!{G          (CTRL)  { self.face_zoom(- 3.0); }}
                 key!{P          (CTRL)  { self.face_zoom(  3.0); }}
-                key!{ArrowRight (NONE)  { self.face_mv_x(-30.0); }}
-                key!{ArrowLeft  (NONE)  { self.face_mv_x( 30.0); }}
-                key!{ArrowDown  (NONE)  { self.face_mv_y(-30.0); }}
-                key!{ArrowUp    (NONE)  { self.face_mv_y( 30.0); }}
-                key!{ArrowRight (CTRL)  { self.face_mv_x(- 3.0); }}
-                key!{ArrowLeft  (CTRL)  { self.face_mv_x(  3.0); }}
-                key!{ArrowDown  (CTRL)  { self.face_mv_y(- 3.0); }}
-                key!{ArrowUp    (CTRL)  { self.face_mv_y(  3.0); }}
+                key!{ArrowRight (NONE)  { self.face_mv(-30.0,   0.0); }}
+                key!{ArrowLeft  (NONE)  { self.face_mv( 30.0,   0.0); }}
+                key!{ArrowDown  (NONE)  { self.face_mv(  0.0, -30.0); }}
+                key!{ArrowUp    (NONE)  { self.face_mv(  0.0,  30.0); }}
+                key!{ArrowRight (CTRL)  { self.face_mv(- 3.0,   0.0); }}
+                key!{ArrowLeft  (CTRL)  { self.face_mv(  3.0,   0.0); }}
+                key!{ArrowDown  (CTRL)  { self.face_mv(  0.0, - 3.0); }}
+                key!{ArrowUp    (CTRL)  { self.face_mv(  0.0,   3.0); }}
                 key!{Space      (NONE)  { self.face_select( 1); }}
                 key!{Backspace  (NONE)  { self.face_select(-1); }}
                 key!{Space      (SHIFT) { self.face_select( 6); }}
@@ -127,28 +127,10 @@ impl App {
     }
 
     fn face_zoom(&mut self, delta: f32) {
-        let full_face = &mut self.faces[self.face_n];
-        if let Data::Ready { face, .. } = &mut full_face.data {
-            face.w += delta;
-            full_face.set_texture_from_cropped_image();
-        }
+        self.faces.get_mut(self.face_n).unwrap().zoom(delta);
     }
 
-    fn face_mv_x(&mut self, delta: f32) {
-        let full_face = &mut self.faces[self.face_n];
-        if let Data::Ready { face, .. } = &mut full_face.data {
-            face.cx += delta;
-            full_face.set_texture_from_cropped_image();
-        }
-    }
-
-    fn face_mv_y(&mut self, delta: f32) {
-        let full_face = &mut self.faces[self.face_n];
-        if let Data::Ready { face, .. } = &mut full_face.data {
-            face.cy += delta;
-            full_face.set_texture_from_cropped_image();
-        }
-    }
+    fn face_mv(&mut self, dx: f32, dy: f32) { self.faces[self.face_n].mv(dx, dy); }
 
     fn sort(&mut self) {
         // Identify which face was selected before sorting, by its path
@@ -252,8 +234,15 @@ impl Face {
                 .show(ui, |ui| {
                     ui.vertical_centered(|ui| {
                         let w = ui.available_width();
-                        ui.add(egui::Image::new(&self.texture)
-                               .max_size(Vec2 { x: w, y: w * ASPECT_RATIO }));
+                        let response = ui.add(
+                            egui::Image::new(&self.texture)
+                                .max_size(Vec2 { x: w, y: w * ASPECT_RATIO })
+                                .sense(Sense::click_and_drag())
+                        );
+                        if response.dragged() {
+                            let Vec2 { x, y } = response.drag_motion();
+                            self.mv(-x, -y);
+                        }
                     });
                 });
             match &mut self.data {
@@ -297,6 +286,21 @@ impl Face {
         }
     }
 
+    pub fn zoom(&mut self, delta: f32) {
+        if let Data::Ready { face, .. } = &mut self.data {
+            face.w += delta;
+            self.set_texture_from_cropped_image();
+        }
+    }
+
+    pub fn mv(&mut self, dx: f32, dy: f32) {
+        if let Data::Ready { face, .. } = &mut self.data {
+            face.cx += dx;
+            face.cy += dy;
+            self.set_texture_from_cropped_image();
+        }
+    }
+
     pub fn set_texture_from_cropped_image(&mut self) {
         if let Data::Ready { face, image } = &mut self.data {
             let cropped_image = crop(image, face);
@@ -317,8 +321,6 @@ impl Face {
             Data::Ready { face, .. } => Ok(face.embed_in_jpeg(&self.path)?),
             Data::Loading(_) => Err(face::Error::FaceNotLoaded)
         }
-
-
 
     }
 }
