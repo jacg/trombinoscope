@@ -180,7 +180,17 @@ impl Face {
                         .sense(Sense::click_and_drag())
                 );
                 if response.dragged() {
-                    let Vec2 { x, y } = response.drag_motion();
+                    let Vec2 { mut x, mut y } = response.drag_motion();
+                    ctx.input(|i| {
+                        if i.modifiers.shift {
+                            x *= 3.0;
+                            y *= 3.0;
+                        }
+                        if i.modifiers.ctrl {
+                            x /= 5.0;
+                            y /= 5.0;
+                        }
+                    });
                     if response.dragged_by(PointerButton::Primary)   { self.mv(-x, -y); }
                     if response.dragged_by(PointerButton::Secondary) { self.zoom(y); }
                 }
