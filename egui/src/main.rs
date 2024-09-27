@@ -1,14 +1,14 @@
+// TODO rotation
+// TODO precise controls
 // TODO asynchronous writing
 // TODO add class name to header
 // TODO display help
-// TODO mouse UI ?
-// TODO infer names from filename if no metadata ?
 // TODO option to rename files from metadata names ?
 
 use std::{fs::File, path::{Path, PathBuf}, sync::mpsc};
 
 use eframe::{egui, CreationContext};
-use egui::{Color32, ColorImage, Context, Frame, Key, Sense, TextureHandle, TextureOptions, Ui, Vec2};
+use egui::{Color32, ColorImage, Context, Key, PointerButton, Sense, TextureHandle, TextureOptions, Ui, Vec2};
 use image::{codecs::jpeg::JpegEncoder, DynamicImage};
 
 use face::{FaceInImage, ASPECT_RATIO};
@@ -69,7 +69,7 @@ impl App {
         let n_rows = self.faces.len() / 6 + 1;
         egui::Grid::new("face grid").show(ui, |ui| {
             for (n, face) in self.faces.iter_mut().enumerate() {
-                if face.show(ui, ctx, n == self.face_n, n_rows) {
+                if face.show(ui, ctx, n_rows) {
                     sort = true;
                 }
                 if n % 6 == 5 { ui.end_row() }
@@ -173,7 +173,7 @@ impl Face {
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, selected: bool, n_rows: usize) -> bool {
+    pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, n_rows: usize) -> bool {
         let w = ctx.available_rect().width();
         let h = ctx.available_rect().height();
         let top_margin = 10.0;
@@ -189,17 +189,15 @@ impl Face {
                 );
                 if response.dragged() {
                     let Vec2 { x, y } = response.drag_motion();
-                    if response.dragged_by(egui::PointerButton::Primary)   { self.mv(-x, -y); }
-                    if response.dragged_by(egui::PointerButton::Secondary) { self.zoom(y); }
+                    if response.dragged_by(PointerButton::Primary)   { self.mv(-x, -y); }
+                    if response.dragged_by(PointerButton::Secondary) { self.zoom(y); }
                 }
             });
             match &mut self.data {
                 Data::Ready { face, .. } => {
-                    if
-                        ui.text_edit_singleline(&mut face.given ).lost_focus() ||
-                        ui.text_edit_singleline(&mut face.family).lost_focus() {
-                            request_sort = true;
-                        }
+                    let a = ui.text_edit_singleline(&mut face.given ).lost_focus();
+                    let b = ui.text_edit_singleline(&mut face.family).lost_focus();
+                    if a || b { request_sort = true; }
                 }
                 Data::Loading(rx) => {
                     ctx.request_repaint_after(std::time::Duration::from_millis(10));
