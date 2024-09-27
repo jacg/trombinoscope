@@ -8,7 +8,7 @@
 use std::{fs::File, path::{Path, PathBuf}, sync::mpsc};
 
 use eframe::{egui, CreationContext};
-use egui::{Color32, ColorImage, Context, Key, PointerButton, Sense, TextureHandle, TextureOptions, Ui, Vec2};
+use egui::{Color32, ColorImage, Context, Key, PointerButton, Pos2, Rect, Response, Sense, TextureHandle, TextureOptions, Ui, Vec2};
 use image::{codecs::jpeg::JpegEncoder, DynamicImage};
 
 use face::{FaceInImage, ASPECT_RATIO};
@@ -179,6 +179,9 @@ impl Face {
                         .max_size(Vec2 { x: w, y: w * ASPECT_RATIO })
                         .sense(Sense::click_and_drag())
                 );
+                if response.clicked_by(PointerButton::Primary) {
+                    self.centre_on_pointer(&response)
+                }
                 if response.dragged() {
                     let Vec2 { mut x, mut y } = response.drag_motion();
                     ctx.input(|i| {
@@ -227,6 +230,20 @@ impl Face {
             }
         });
         request_sort
+    }
+
+    pub fn centre_on_pointer(&mut self, response: &Response) {
+        if let Data::Ready { face: FaceInImage { cx, cy, w, .. }, .. } = &mut self.data {
+            if let Some(Pos2{ x, y }) = response.interact_pointer_pos() {
+                let Rect{ min: Pos2 { x: x_min, y: y_min } , max: Pos2 { x: x_max, y: y_max } } = response.rect;
+                let x_frac = (x - x_min) / (x_max - x_min);
+                let y_frac = (y - y_min) / (y_max - y_min);
+                let h = *w * ASPECT_RATIO;
+                *cx = *cx - *w / 2.0 + x_frac * *w;
+                *cy = *cy -  h / 2.0 + y_frac *  h;
+                self.set_texture_from_cropped_image();
+            }
+        }
     }
 
     pub fn rotate(&mut self, d_rot: i8) {
