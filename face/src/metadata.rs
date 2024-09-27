@@ -7,7 +7,7 @@ use std::{
 use bitcode::{Decode, Encode};
 use img_parts::jpeg::{self, Jpeg, JpegSegment};
 
-use util::{read_jpeg, write_jpeg};
+use util::{basename_stem, filename_to_given_family, read_jpeg, write_jpeg};
 
 use crate::{
     error::{Error, Result},
@@ -28,15 +28,22 @@ pub struct FaceInImage {
 impl FaceInImage {
 
     /// Construct default guess of face description for image with given width
-    /// and height
+    /// and height. If `path` contains '@' treat it as separator between
+    /// given name and family name.
     pub fn default_for(width: f32, height: f32, path: impl AsRef<Path>) -> Self {
         let (h, w, rot) = {
             let (w, h) = (width, height);
             if w < h {(w, h, 0)} else {(h, w, 3)}
         };
+        let (given, family) = match filename_to_given_family(&path) {
+            Some(names) => names,
+            None => (
+                "Prénom".into(),
+                basename_stem(path).unwrap_or_else(|| "XXX".into())
+            )
+        };
         Self {
-            given: "Prénom".into(),
-            family: path.as_ref().file_name().map_or_else(|| "XXX".to_string(), |o| o.to_string_lossy().into()),
+            given, family,
             cx: w / 3.0,
             cy: h / 4.0,
             w:  w / 8.0,
@@ -45,12 +52,20 @@ impl FaceInImage {
     }
 
     /// Load image at `path`. If image contains face metadata, use it; otherwise
-    /// use `with` and `height` to guess where the face is, and `path` to set a
-    /// non-empty name.
+    /// use `width` and `height` to guess where the face is, and `path` to set a
+    /// non-empty name. If `path` contains '@' treat it as separator between
+    /// given name and family name.
     pub fn from_path_or_default_for(path: impl AsRef<Path>, width: f32, height: f32) -> Result<Self> {
         Ok(match FaceInImage::from_jpeg_in_file(&path) {
             Ok(face) => face,
-            Err(Error::NoMetadataFound(_)) => FaceInImage::default_for(width, height, path),
+            Err(Error::NoMetadataFound(_)) => {
+                let mut face = FaceInImage::default_for(width, height, &path);
+                if let Some((given, family)) = filename_to_given_family(path) {
+                    face.given = given;
+                    face.family = family;
+                }
+                face
+            }
             Err(Error::Bitcode(_)) => panic!("Old metadata ?"),
             err => err?,
         })
