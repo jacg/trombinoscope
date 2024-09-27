@@ -192,6 +192,8 @@ impl Face {
                     if response.dragged_by(PointerButton::Primary)   { self.mv(-x, -y); }
                     if response.dragged_by(PointerButton::Secondary) { self.zoom(y); }
                 }
+                if response.clicked_by(PointerButton::Secondary) { self.rotate( 1); }
+                if response.clicked_by(PointerButton::Middle   ) { self.rotate(-1); }
             });
             match &mut self.data {
                 Data::Ready { face, .. } => {
