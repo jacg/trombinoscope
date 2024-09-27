@@ -20,6 +20,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = cli::parse();
     let dirs = Dirs::new(cli.class_dir);
 
+    if cli.strip_metadata { face::metadata::strip_from_jpgs_in_dir(&dirs.photo).unwrap(); }
+
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
     let options = eframe::NativeOptions {
