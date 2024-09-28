@@ -1,3 +1,4 @@
+// TODO image tooltip
 // TODO asynchronous writing
 // TODO add class name to header
 // TODO display help
@@ -218,9 +219,9 @@ impl Face {
             });
             match &mut self.data {
                 Data::Ready { face, .. } => {
-                    let a = ui.text_edit_singleline(&mut face.given ).lost_focus();
-                    let b = ui.text_edit_singleline(&mut face.family).lost_focus();
-                    if a || b { request_sort = true; }
+                    let g = ui.text_edit_singleline(&mut face.given ).on_hover_text("Prénom");
+                    let f = ui.text_edit_singleline(&mut face.family).on_hover_text("Nom de famille");
+                    if g.lost_focus() || f.lost_focus() { request_sort = true; }
                 }
                 Data::Loading(rx) => {
                     ctx.request_repaint_after(std::time::Duration::from_millis(10));
