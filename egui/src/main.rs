@@ -1,5 +1,3 @@
-// TODO rotation
-// TODO precise controls
 // TODO asynchronous writing
 // TODO add class name to header
 // TODO display help
