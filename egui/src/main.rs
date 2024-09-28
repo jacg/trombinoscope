@@ -186,12 +186,17 @@ impl Face {
                 );
                 let response = response.on_hover_ui(|ui| {
                     ui.vertical(|ui| {
-                        ui.label("Clic: déplacer ce point au centre de l'image");
-                        ui.label("⬅➡⬆⬇ : déplacer l'image ; ");
-                        ui.label("CTRL ⬆⬇ : redimensionner l'image ; SHIFT : plus vite");
-                        ui.label("CTRL ⬅➡ : tourner l'image ");
-                        ui.label("Glisser avec bouton 1 : déplacer l'image ; SHIFT plus vite ; CTRL plus lentement");
-                        ui.label("Glisser avec bouton 2 : redimensionner l'image ; SHIFT plus vite ; CTRL plus lentement");
+                        ui.heading("Déplacer le visage");
+                        ui.label("• Clic : déplacer ce point au centre de l'image : ASTUCE clic entre les yeux");
+                        ui.label("• Clavier : ⬅➡⬆⬇ (SHIFT : plus vite)");
+                        ui.label("• Glisser avec bouton 1 (SHIFT plus vite ; CTRL plus lentement)");
+                        ui.separator();
+                        ui.heading("Redimensionner le visage");
+                        ui.label("• Clavier : CTRL ⬆⬇ (SHIFT : plus vite)");
+                        ui.label("• Glisser avec bouton 2 (SHIFT plus vite ; CTRL plus lentement)");
+                        ui.separator();
+                        ui.heading("Tourner l'image");
+                        ui.label("• Clavier : CTRL ⬅➡");
                     });
                 });
                 if response.clicked_by(PointerButton::Primary) {
