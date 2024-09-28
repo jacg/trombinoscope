@@ -200,31 +200,28 @@ impl Face {
                         use X::*;
                         ui.heading(RichText::new("Déplacer le visage").color(Color32::LIGHT_BLUE));
                         xxx(ui, &[
-                            D("• Clic : déplacer ce point au centre de l'image :"),
-                            C("ASTUCE", Color32::YELLOW),
-                            D("clic entre les yeux"),
+                            D("• Clic : déplacer ce point au centre de l'image"),
+                            C("ASTUCE : clic entre les yeux", Color32::YELLOW),
                         ]);
                         xxx(ui, &[
-                            D("• Clavier : ⬅➡⬆⬇ ; SHIFT :"),
-                            C("plus vite", Color32::RED),
+                            D("• Clavier : ⬅➡⬆⬇ "),
+                            C("SHIFT: plus vite", Color32::RED),
                         ]);
                         xxx(ui, &[
-                            D("• Glisser avec souris bouton gauche ; SHIFT :"),
-                            C("plus vite", Color32::RED),
-                            D("; CTRL :"),
-                            C("plus lentement", Color32::GREEN),
+                            D("• Glisser avec souris bouton gauche"),
+                            C("SHIFT : plus vite", Color32::RED),
+                            C("CTRL : plus lentement", Color32::GREEN),
                         ]);
                         ui.separator();
                         ui.heading(RichText::new("Redimensionner le visage").color(Color32::LIGHT_BLUE));
                         xxx(ui, &[
-                            D("• Clavier : CTRL ⬆⬇ ; SHIFT :"),
-                            C(" plus vite", Color32::RED),
+                            D("• Clavier : CTRL ⬆⬇"),
+                            C("SHIFT : plus vite", Color32::RED),
                         ]);
                         xxx(ui, &[
-                            D("• Glisser avec souris bouton droit ; SHIFT :"),
-                            C("plus vite", Color32::RED),
-                            D("; CTRL"),
-                            C("plus lentement", Color32::GREEN),
+                            D("• Glisser avec souris bouton droit"),
+                            C("SHIFT : plus vite", Color32::RED),
+                            C("CTRL : plus lentement", Color32::GREEN),
                         ]);
                         ui.separator();
                         ui.heading(RichText::new("Tourner l'image").color(Color32::LIGHT_BLUE));
