@@ -180,6 +180,16 @@ impl Face {
                         .max_size(Vec2 { x: w, y: w * ASPECT_RATIO })
                         .sense(Sense::click_and_drag())
                 );
+                let response = response.on_hover_ui(|ui| {
+                    ui.vertical(|ui| {
+                        ui.label("Clic: déplacer ce point au centre de l'image");
+                        ui.label("⬅➡⬆⬇ : déplacer l'image ; ");
+                        ui.label("CTRL ⬆⬇ : redimensionner l'image ; SHIFT : plus vite");
+                        ui.label("CTRL ⬅➡ : tourner l'image ");
+                        ui.label("Glisser avec bouton 1 : déplacer l'image ; SHIFT plus vite ; CTRL plus lentement");
+                        ui.label("Glisser avec bouton 2 : redimensionner l'image ; SHIFT plus vite ; CTRL plus lentement");
+                    });
+                });
                 if response.clicked_by(PointerButton::Primary) {
                     self.centre_on_pointer(&response)
                 }
