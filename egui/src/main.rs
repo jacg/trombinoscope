@@ -11,7 +11,7 @@
 use std::{fs::File, path::{Path, PathBuf}, sync::mpsc};
 
 use eframe::{egui, CreationContext};
-use egui::{Color32, ColorImage, Context, Key, PointerButton, Pos2, Rect, Response, Sense, TextureHandle, TextureOptions, Ui, Vec2};
+use egui::{Color32, ColorImage, Context, Key, PointerButton, Pos2, Rect, Response, RichText, Sense, TextureHandle, TextureOptions, Ui, Vec2};
 use image::{codecs::jpeg::JpegEncoder, DynamicImage};
 
 use face::{FaceInImage, ASPECT_RATIO};
@@ -186,16 +186,48 @@ impl Face {
                 );
                 let response = response.on_hover_ui(|ui| {
                     ui.vertical(|ui| {
-                        ui.heading("Déplacer le visage");
-                        ui.label("• Clic : déplacer ce point au centre de l'image : ASTUCE clic entre les yeux");
-                        ui.label("• Clavier : ⬅➡⬆⬇ (SHIFT : plus vite)");
-                        ui.label("• Glisser avec bouton 1 (SHIFT plus vite ; CTRL plus lentement)");
+                        enum X { C(&'static str, Color32), D(&'static str) }
+                        fn xxx(ui: &mut Ui, stuff: &[X]) {
+                            ui.horizontal(|ui| {
+                                for thing in stuff {
+                                    match thing {
+                                        X::C(txt, col) => ui.colored_label(*col, *txt),
+                                        X::D(txt     ) => ui.        label(      *txt),
+                                    };
+                                }
+                            });
+                        }
+                        use X::*;
+                        ui.heading(RichText::new("Déplacer le visage").color(Color32::LIGHT_BLUE));
+                        xxx(ui, &[
+                            D("• Clic : déplacer ce point au centre de l'image :"),
+                            C("ASTUCE", Color32::YELLOW),
+                            D("clic entre les yeux"),
+                        ]);
+                        xxx(ui, &[
+                            D("• Clavier : ⬅➡⬆⬇ ; SHIFT :"),
+                            C("plus vite", Color32::RED),
+                        ]);
+                        xxx(ui, &[
+                            D("• Glisser avec souris bouton gauche ; SHIFT :"),
+                            C("plus vite", Color32::RED),
+                            D("; CTRL :"),
+                            C("plus lentement", Color32::GREEN),
+                        ]);
                         ui.separator();
-                        ui.heading("Redimensionner le visage");
-                        ui.label("• Clavier : CTRL ⬆⬇ (SHIFT : plus vite)");
-                        ui.label("• Glisser avec bouton 2 (SHIFT plus vite ; CTRL plus lentement)");
+                        ui.heading(RichText::new("Redimensionner le visage").color(Color32::LIGHT_BLUE));
+                        xxx(ui, &[
+                            D("• Clavier : CTRL ⬆⬇ ; SHIFT :"),
+                            C(" plus vite", Color32::RED),
+                        ]);
+                        xxx(ui, &[
+                            D("• Glisser avec souris bouton droit ; SHIFT :"),
+                            C("plus vite", Color32::RED),
+                            D("; CTRL"),
+                            C("plus lentement", Color32::GREEN),
+                        ]);
                         ui.separator();
-                        ui.heading("Tourner l'image");
+                        ui.heading(RichText::new("Tourner l'image").color(Color32::LIGHT_BLUE));
                         ui.label("• Clavier : CTRL ⬅➡");
                     });
                 });
