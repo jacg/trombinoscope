@@ -1,8 +1,12 @@
-// TODO image tooltip
-// TODO asynchronous writing
 // TODO add class name to header
+// TODO asynchronous writing
 // TODO display help
+// TODO speed slider in help
+// TODO multiple faces in one photo
+// TODO fix sporadic inability to edit names
 // TODO option to rename files from metadata names ?
+
+// TODO Thumbhash or something else from https://lucasmerlin.github.io/hello_egui/
 
 use std::{fs::File, path::{Path, PathBuf}, sync::mpsc};
 
