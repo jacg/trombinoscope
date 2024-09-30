@@ -1,4 +1,4 @@
-// TODO add class name to header
+// TODO centre class name in header
 // TODO asynchronous writing
 // TODO display help
 // TODO speed slider in help
@@ -67,7 +67,7 @@ impl App {
     }
 
     pub fn show(&mut self, ui: &mut Ui, ctx: &Context) {
-        ui.heading("Trombinoscope");
+        ui.heading("Classe".to_owned() + &self.dirs.class_name());
         let mut sort = false;
         let n_rows = self.faces.len() / 6 + 1;
         egui::Grid::new("face grid").show(ui, |ui| {
