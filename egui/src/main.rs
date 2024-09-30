@@ -226,6 +226,9 @@ impl Face {
                         ui.separator();
                         ui.heading(RichText::new("Tourner l'image").color(Color32::LIGHT_BLUE));
                         ui.label("• Clavier : CTRL ⬅➡");
+                        ui.separator();
+                        ui.label("• CTRL S : sauvegarder");
+                        ui.label("• CTRL Q : quitter sans sauvegarder");
                     });
                 });
                 if response.clicked_by(PointerButton::Primary) {
