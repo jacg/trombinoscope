@@ -130,6 +130,8 @@ pub fn move_index_by(index: usize, delta: isize, size: usize) -> usize {
     (index as isize + delta).rem_euclid(size as _) as _
 }
 
+pub const MAITRES_DE_CLASSE_FILENAME: &str = "maitres-de-classe.txt";
+pub const MAITRES_DE_CLASSE_DEFAULT_CONTENT: &str = "Ajouter MdC, séparés par des virgules";
 
 #[cfg(test)]
 mod tests {

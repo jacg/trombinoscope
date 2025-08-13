@@ -18,7 +18,10 @@ use image::{codecs::jpeg::JpegEncoder, DynamicImage};
 
 use face::{FaceInImage, ASPECT_RATIO};
 use render::trombinoscope;
-use util::{ensure_empty_dir, find_jpgs_in_dir, Dirs};
+use util::{
+    ensure_empty_dir, find_jpgs_in_dir, Dirs,
+    MAITRES_DE_CLASSE_FILENAME, MAITRES_DE_CLASSE_DEFAULT_CONTENT,
+};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 
@@ -47,9 +50,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 struct App {
     dirs: Dirs,
     faces: Vec<Face>,
+    maitres_text: String,
 }
 
 impl App {
+
     fn new(dirs: Dirs, cc: &CreationContext) -> Self {
         let (tx, rx) = mpsc::channel::<(PathBuf, mpsc::Sender<face::Result<Data>>)>();
         std::thread::spawn(move || {
@@ -62,14 +67,31 @@ impl App {
             .into_iter()
             .map(move |path| { Face::load(path, cc, tx.clone()).unwrap() })
             .collect();
+
+        let maitres_file_path = dirs.class.join(MAITRES_DE_CLASSE_FILENAME);
+        let maitres_text = std::fs::read_to_string(&maitres_file_path)
+            .unwrap_or_else(|_| {
+                let default_content = MAITRES_DE_CLASSE_DEFAULT_CONTENT.to_string();
+                let _ = std::fs::write(&maitres_file_path, &default_content);
+                default_content
+            });
+
         Self {
             dirs,
             faces,
+            maitres_text,
         }
     }
 
     pub fn show(&mut self, ui: &mut Ui, ctx: &Context) {
         ui.heading("Classe".to_owned() + &self.dirs.class_name());
+
+        ui.horizontal(|ui| {
+            ui.label("Maîtres de classe :");
+            ui.text_edit_singleline(&mut self.maitres_text);
+        });
+        ui.separator();
+
         let mut sort = false;
         let n_rows = self.faces.len() / 6 + 1;
         egui::Grid::new("face grid").show(ui, |ui| {
@@ -105,6 +127,10 @@ impl App {
 
     fn save_and_regenerate(&self) -> face::Result<()> {
         save_many_face_metadata(&self.faces)?;
+
+        let maitres_file_path = self.dirs.class.join(MAITRES_DE_CLASSE_FILENAME);
+        std::fs::write(&maitres_file_path, &self.maitres_text)?;
+
         ensure_empty_dir(&self.dirs.work)?;
         ensure_empty_dir(&self.dirs.render)?;
         write_many_face_images(&self.faces, &self.dirs.work)?;

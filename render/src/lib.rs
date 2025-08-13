@@ -17,7 +17,11 @@ use typst::{
     Library,
 };
 
-use util::{Dirs, FileType, Item, Name, find_jpgs_in_dir, path_to_item, sort_key, unix_rm_rf, unix_mv};
+use util::{
+    Dirs, FileType, Item, Name,
+    MAITRES_DE_CLASSE_FILENAME, MAITRES_DE_CLASSE_DEFAULT_CONTENT,
+    find_jpgs_in_dir, path_to_item, sort_key, unix_rm_rf, unix_mv,
+};
 
 /// Main interface that determines the environment for Typst.
 pub struct TypstWrapperWorld {
@@ -293,6 +297,20 @@ fn trombi_typst_src(items: &[Item], dir: &Dirs) -> String {
         .join(",\n");
     let class_name = dir.class_name();
 
+    let maitres_de_classe_file_location = dir.class.join(MAITRES_DE_CLASSE_FILENAME);
+    let maitres_de_classe = match fs::read_to_string(&maitres_de_classe_file_location) {
+        Ok(content) => content,
+        Err(_) => {
+            fs::write(&maitres_de_classe_file_location, MAITRES_DE_CLASSE_DEFAULT_CONTENT).unwrap();
+            fs::read_to_string(&maitres_de_classe_file_location).unwrap()
+        }
+    }
+    .split(',')
+    .map(|item| item.trim())
+    .filter(|item| !item.is_empty())
+    .collect::<Vec<_>>()
+    .join(" - ");
+
     format!(r#"#set page(
   paper: "a4",
   margin: (top: 10mm, bottom: 4mm, left: 5mm, right: 5mm),
@@ -302,8 +320,9 @@ fn trombi_typst_src(items: &[Item], dir: &Dirs) -> String {
 #let colF = rgb(0,0,150)
 
 #align(center, text([CLASSE {class_name}], size: 50pt))
-
 #v(-10mm) // TODO find sensible way of reducing space before table
+
+#align(center, text([{maitres_de_classe}], size: 15pt))
 
 #let pic(path) = image(path, width: 100%)
 
