@@ -2,7 +2,6 @@
 // TODO report locations of generated output PDFs
 // TODO quit confirm / save / cancel dialog
 // TODO asynchronous writing
-// TODO display help
 // TODO speed slider in help
 // TODO multiple faces in one photo
 // TODO fix sporadic inability to edit names
