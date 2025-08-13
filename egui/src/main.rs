@@ -418,7 +418,11 @@ fn write_one_face_image(f: &Face, dir: impl AsRef<Path>) -> face::Result<()> {
     let filename = format!("{} @ {}.jpg", &face.given, &face.family);
     let path = dir.as_ref().join(&*filename);
     let file = &mut File::create(path)?;
-    let mut encoder = JpegEncoder::new(file);
+
+    // Quality range: 0 (smallest file, lowest quality) to 100 (largest file, highest quality)
+    let quality = 15;
+    let mut encoder = JpegEncoder::new_with_quality(file, quality);
+
     encoder.encode(
         &f.as_bytes(),
         face.w as u32,
