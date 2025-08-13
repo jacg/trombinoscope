@@ -414,19 +414,30 @@ fn write_many_face_images(faces: &[Face], dir: impl AsRef<Path>) -> face::Result
 
 /// Save one cropped face in its own image file in `dir`. Assumes `dir` exists.
 fn write_one_face_image(f: &Face, dir: impl AsRef<Path>) -> face::Result<()> {
-    let face = if let Data::Ready { face, .. } = &f.data {face} else { return Err(face::Error::FaceNotLoaded)};
+    let (face, source_image) = if let Data::Ready { face, image } = &f.data {
+        (face, image)
+    } else {
+        return Err(face::Error::FaceNotLoaded)
+    };
+
     let filename = format!("{} @ {}.jpg", &face.given, &face.family);
     let path = dir.as_ref().join(&*filename);
     let file = &mut File::create(path)?;
+
+    let cropped = crop(source_image, face);
+
+    let target_width  = 200;
+    let target_height = (target_width as f32 * ASPECT_RATIO) as u32;
+    let resized = cropped.resize(target_width, target_height, image::imageops::FilterType::Lanczos3);
 
     // Quality range: 0 (smallest file, lowest quality) to 100 (largest file, highest quality)
     let quality = 15;
     let mut encoder = JpegEncoder::new_with_quality(file, quality);
 
     encoder.encode(
-        &f.as_bytes(),
-        face.w as u32,
-        face.h() as u32,
+        resized.as_bytes(),
+        target_width,
+        target_height,
         image::ExtendedColorType::Rgb8
     ).unwrap();
     Ok(())
