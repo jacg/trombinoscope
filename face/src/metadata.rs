@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// The information needed to label and locate a face inside a photograph
-#[derive(Encode, Decode, PartialEq, Debug)]
+#[derive(Encode, Decode, PartialEq, Debug, Clone)]
 pub struct FaceInImage {
     pub given: String,
     pub family: String,

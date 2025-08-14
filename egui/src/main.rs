@@ -1,7 +1,6 @@
 // TODO centre class name in header
 // TODO report locations of generated output PDFs
 // TODO quit confirm / save / cancel dialog
-// TODO asynchronous writing
 // TODO speed slider in help
 // TODO multiple faces in one photo
 // TODO fix sporadic inability to edit names
@@ -9,18 +8,19 @@
 
 // TODO Thumbhash or something else from https://lucasmerlin.github.io/hello_egui/
 
-use std::{fs::File, path::{Path, PathBuf}, sync::mpsc};
+use std::{fs::File, path::{Path, PathBuf}, sync::mpsc, time::{Duration, Instant}, thread};
 
 use eframe::{egui, CreationContext};
 use egui::{Color32, ColorImage, Context, Key, PointerButton, Pos2, Rect, Response, RichText, Sense, TextureHandle, TextureOptions, Ui, Vec2};
 use image::{codecs::jpeg::JpegEncoder, DynamicImage};
 
 use face::{FaceInImage, ASPECT_RATIO};
-use render::trombinoscope;
+use render::{trombinoscope, trombi_file_for_dir};
 use util::{
     ensure_empty_dir, find_jpgs_in_dir, Dirs,
     MAITRES_DE_CLASSE_FILENAME, MAITRES_DE_CLASSE_DEFAULT_CONTENT,
     CONFIG_FILENAME, DEFAULT_JPEG_QUALITY, DEFAULT_IMAGE_WIDTH,
+    FileType,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -47,12 +47,52 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[derive(Debug, Clone)]
+enum PdfStatus {
+    Missing,
+    GeneratingLatest           { started: Instant },
+    GeneratingPrevious { started: Instant },
+    Ready {
+        size_bytes: u64,
+        generation_time: Duration
+    },
+}
+
+#[derive(Debug)]
+struct SaveRequest(SaveData);
+
+#[derive(Debug)]
+enum SaveResponse {
+    Completed { generation_time: Duration },
+    Error(String),
+}
+
+#[derive(Debug, Clone)]
+struct SaveData {
+    face_data: Vec<FaceData>,
+    maitres_text: String,
+    jpeg_quality: u8,
+    image_width: u32,
+}
+
+#[derive(Debug, Clone)]
+struct FaceData {
+    path: PathBuf,
+    face: FaceInImage,
+    image: DynamicImage,
+}
+
 struct App {
     dirs: Dirs,
     faces: Vec<Face>,
     maitres_text: String,
     jpeg_quality: u8,
     image_width: u32,
+
+    // PDF status tracking
+    pdf_status: PdfStatus,
+    save_request_tx: mpsc::Sender<SaveRequest>,
+    save_response_rx: mpsc::Receiver<SaveResponse>,
 }
 
 impl App {
@@ -80,12 +120,41 @@ impl App {
 
         let (jpeg_quality, image_width) = Self::load_config(&dirs);
 
+        // Create save thread
+        let (save_request_tx,  save_request_rx)  = mpsc::channel::<SaveRequest>();
+        let (save_response_tx, save_response_rx) = mpsc::channel::<SaveResponse>();
+
+        let dirs_clone = dirs.clone();
+        thread::spawn(move || {
+            save_worker_thread(dirs_clone, save_request_rx, save_response_tx);
+        });
+
+        // Check initial PDF status
+        let pdf_status = Self::check_pdf_status(&dirs);
+
         Self {
             dirs,
             faces,
             maitres_text,
             jpeg_quality,
             image_width,
+            pdf_status,
+            save_request_tx,
+            save_response_rx,
+        }
+    }
+
+    fn check_pdf_status(dirs: &Dirs) -> PdfStatus {
+        // Look for trombinoscope PDF in the class directory
+        let trombi_path = trombi_file_for_dir(&dirs.class, &dirs.class_name(), FileType::Trombi);
+
+        if let Ok(metadata) = std::fs::metadata(&trombi_path) {
+            PdfStatus::Ready {
+                size_bytes: metadata.len(),
+                generation_time: Duration::from_secs(0), // Unknown for existing files
+            }
+        } else {
+            PdfStatus::Missing
         }
     }
 
@@ -124,13 +193,115 @@ impl App {
         }
     }
 
-    fn save_config(&self) -> std::io::Result<()> {
-        let config_path = self.dirs.class.join(CONFIG_FILENAME);
-        let config_content = format!("jpeg_quality={}\nimage_width={}\n", self.jpeg_quality, self.image_width);
-        std::fs::write(&config_path, &config_content)
+    fn request_save(&mut self) {
+        let save_data = self.collect_save_data();
+
+        // If a save request arrives while the PDFs are being generated, finish
+        // the current generation, and then immediately start the next one. Save
+        // requests sent during generation are idempotent, so we need not record
+        // more than one.
+        use PdfStatus::*;
+        match self.pdf_status {
+            GeneratingLatest { started } => { self.pdf_status = PdfStatus::GeneratingPrevious { started }; }
+            GeneratingPrevious { .. } => {} // Already queued, ignore additional requests
+            Missing | Ready { .. } => {
+                self.pdf_status = PdfStatus::GeneratingLatest { started: Instant::now() };
+                let _ = self.save_request_tx.send(SaveRequest(save_data));
+            }
+        }
+    }
+
+    fn collect_save_data(&self) -> SaveData {
+        let face_data: Vec<FaceData> = self.faces.iter()
+            .filter_map(|face| {
+                if let Data::Ready { face: face_in_image, image } = &face.data {
+                    Some(FaceData {
+                        path: face.path.clone(),
+                        face: face_in_image.clone(),
+                        image: image.clone(),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        SaveData {
+            face_data,
+            maitres_text: self.maitres_text.clone(),
+            jpeg_quality: self.jpeg_quality,
+            image_width: self.image_width,
+        }
+    }
+
+    fn update_pdf_status(&mut self) {
+        // Check for save completion messages
+        while let Ok(response) = self.save_response_rx.try_recv() {
+            match response {
+                SaveResponse::Completed { generation_time } => {
+                    match self.pdf_status {
+                        PdfStatus::GeneratingPrevious { .. } => {
+                            // Start the queued generation
+                            let save_data = self.collect_save_data();
+                            self.pdf_status = PdfStatus::GeneratingLatest { started: Instant::now() };
+                            let _ = self.save_request_tx.send(SaveRequest(save_data));
+                        }
+                        _ => {
+                            // Check the actual PDF file size
+                            let size_bytes = self.get_pdf_size().unwrap_or(0);
+                            self.pdf_status = PdfStatus::Ready { size_bytes, generation_time };
+                        }
+                    }
+                }
+                SaveResponse::Error(err) => {
+                    eprintln!("Save error: {}", err);
+                    // Reset to previous state
+                    self.pdf_status = Self::check_pdf_status(&self.dirs);
+                }
+            }
+        }
+    }
+
+    fn get_pdf_size(&self) -> Option<u64> {
+        let trombi_path = trombi_file_for_dir(&self.dirs.class, &self.dirs.class_name(), FileType::Trombi);
+        std::fs::metadata(&trombi_path).ok()?.len().into()
+    }
+
+    fn show_pdf_status(&self, ui: &mut Ui) {
+        ui.horizontal(|ui| {
+            ui.label("Trombinoscope PDF:");
+
+            match self.pdf_status {
+                PdfStatus::Missing => {
+                    ui.colored_label(Color32::LIGHT_RED, "Not generated yet");
+                }
+                PdfStatus::GeneratingLatest { started } => {
+                    ui.colored_label(Color32::YELLOW, format!("Generating... ({:.1}s)", started.elapsed().as_secs_f32()));
+                }
+                PdfStatus::GeneratingPrevious { started } => {
+                    ui.colored_label(Color32::ORANGE, format!("Generating... ({:.1}s) [Queued]", started.elapsed().as_secs_f32()));
+                }
+                PdfStatus::Ready { size_bytes, generation_time } => {
+                    let size_kb = size_bytes as f64 / 1024.0;
+                    let time_str = if generation_time.is_zero() { "earlier session".to_string() }
+                    else                                        { format!("{:.1}s", generation_time.as_secs_f32()) };
+                    ui.colored_label(Color32::LIGHT_GREEN, format!("Ready: {:.1} KB (generated in {})", size_kb, time_str));
+                }
+            }
+        });
     }
 
     pub fn show(&mut self, ui: &mut Ui, ctx: &Context) {
+        self.update_pdf_status();
+
+        // Request repaint for ongoing operations that show time elapsing
+        match self.pdf_status {
+            PdfStatus::GeneratingLatest { .. } | PdfStatus::GeneratingPrevious { .. } => {
+                ctx.request_repaint_after(std::time::Duration::from_millis(100));
+            }
+            _ => {}
+        }
+
         ui.heading("Classe".to_owned() + &self.dirs.class_name());
 
         ui.horizontal(|ui| {
@@ -145,6 +316,8 @@ impl App {
             ui.label("Largeur :");
             ui.add(egui::Slider::new(&mut self.image_width, 50..=1000).suffix("px"));
         });
+
+        self.show_pdf_status(ui);
 
         ui.separator();
 
@@ -169,7 +342,7 @@ impl App {
                     if i.key_pressed(Key::$key) && i.modifiers.matches_exact($(Modifiers::$mod)|*) $body
                 };
             }
-            key!{S (CTRL)  { self.save_and_regenerate().unwrap(); }}
+            key!{S (CTRL)  { self.request_save(); }}
             key!{Q (CTRL)  { std::process::exit(0) }} // TODO exit less brutally
         });
     }
@@ -180,24 +353,6 @@ impl App {
             Data::Ready { face, .. } => (face.family.to_uppercase(), face.given.to_uppercase()),
         });
     }
-
-
-    fn save_and_regenerate(&self) -> face::Result<()> {
-        save_many_face_metadata(&self.faces)?;
-
-        let maitres_file_path = self.dirs.class.join(MAITRES_DE_CLASSE_FILENAME);
-        std::fs::write(&maitres_file_path, &self.maitres_text)?;
-
-        // Save config settings
-        self.save_config()?;
-
-        ensure_empty_dir(&self.dirs.work)?;
-        ensure_empty_dir(&self.dirs.render)?;
-        write_many_face_images(&self.faces, &self.dirs.work, self.jpeg_quality, self.image_width)?;
-        trombinoscope(&self.dirs);
-        Ok(())
-    }
-
 }
 
 impl eframe::App for App {
@@ -459,34 +614,71 @@ pub fn adapt_for_texture(cropped: &DynamicImage) -> egui::ColorImage {
     egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice())
 }
 
+fn save_worker_thread(
+    dirs: Dirs,
+    request_rx: mpsc::Receiver<SaveRequest>,
+    response_tx: mpsc::Sender<SaveResponse>,
+) {
+    for request in request_rx {
+        match request {
+            SaveRequest(save_data) => {
+                let start_time = Instant::now();
+
+                match save_and_regenerate(save_data, &dirs) {
+                    Ok(()) => { let _ = response_tx.send(SaveResponse::Completed { generation_time : start_time.elapsed() }); }
+                    Err(e) => { let _ = response_tx.send(SaveResponse::Error(e.to_string())); }
+                }
+            }
+        }
+    }
+}
+
+fn save_and_regenerate(save_data: SaveData, dirs: &Dirs) -> face::Result<()> {
+    save_many_face_metadata(&save_data.face_data)?;
+
+    let maitres_file_path = dirs.class.join(MAITRES_DE_CLASSE_FILENAME);
+    std::fs::write(&maitres_file_path, &save_data.maitres_text)?;
+
+    // Save config settings
+    save_config(&save_data, dirs)?;
+
+    ensure_empty_dir(&dirs.work)?;
+    ensure_empty_dir(&dirs.render)?;
+    write_many_face_images(&save_data.face_data, &dirs.work, save_data.jpeg_quality, save_data.image_width)?;
+    trombinoscope(dirs);
+    Ok(())
+}
+
+fn save_config(save_data: &SaveData, dirs: &Dirs) -> std::io::Result<()> {
+    let config_path = dirs.class.join(CONFIG_FILENAME);
+    let config_content = format!("jpeg_quality={}\nimage_width={}\n", save_data.jpeg_quality, save_data.image_width);
+    std::fs::write(&config_path, &config_content)
+}
+
 /// Store the location and name of each face in the JPEG segment of the image
 /// containing the face
-fn save_many_face_metadata(faces: &[Face]) -> face::Result<()> {
-    for face in faces { face.save_metadata()?; }
+fn save_many_face_metadata(face_data: &[FaceData]) -> face::Result<()> {
+    for data in face_data {
+        data.face.embed_in_jpeg(&data.path)?;
+    }
     Ok(())
 }
 
 /// Save each cropped face in its own image file in `dir`. Assumes `dir` exists.
-fn write_many_face_images(faces: &[Face], dir: impl AsRef<Path>, quality: u8, width: u32) -> face::Result<()> {
-    for face in faces {
-        write_one_face_image(face, &dir, quality, width)?;
+fn write_many_face_images(face_data: &[FaceData], dir: impl AsRef<Path>, quality: u8, width: u32) -> face::Result<()> {
+    for data in face_data {
+        write_one_face_image(data, &dir, quality, width)?;
     }
     Ok(())
 }
 
 /// Save one cropped face in its own image file in `dir`. Assumes `dir` exists.
-fn write_one_face_image(f: &Face, dir: impl AsRef<Path>, quality: u8, target_width: u32) -> face::Result<()> {
-    let (face, source_image) = if let Data::Ready { face, image } = &f.data {
-        (face, image)
-    } else {
-        return Err(face::Error::FaceNotLoaded)
-    };
-
-    let filename = format!("{} @ {}.jpg", &face.given, &face.family);
-    let path = dir.as_ref().join(&*filename);
+fn write_one_face_image(data: &FaceData, dir: impl AsRef<Path>, quality: u8, target_width: u32) -> face::Result<()> {
+    let filename = format!("{} @ {}.jpg", &data.face.given, &data.face.family);
+    let path = dir.as_ref().join(&filename);
     let file = &mut File::create(path)?;
 
-    let cropped = crop(source_image, face);
+    let cropped = crop(&data.image, &data.face);
 
     let target_height = (target_width as f32 * ASPECT_RATIO) as u32;
     let resized = cropped.resize(target_width, target_height, image::imageops::FilterType::Lanczos3);
@@ -498,6 +690,6 @@ fn write_one_face_image(f: &Face, dir: impl AsRef<Path>, quality: u8, target_wid
         target_width,
         target_height,
         image::ExtendedColorType::Rgb8
-    ).unwrap();
+    )?;
     Ok(())
 }

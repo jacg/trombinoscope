@@ -76,7 +76,7 @@ pub fn is_jpg(path: impl AsRef<Path>) -> bool {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Dirs {
     pub class: PathBuf,
     pub photo: PathBuf,

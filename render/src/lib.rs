@@ -407,7 +407,7 @@ fn render(
 }
 
 
-fn trombi_file_for_dir(dir: impl AsRef<Path>, class_name: &str, ftype: FileType) -> PathBuf {
+pub fn trombi_file_for_dir(dir: impl AsRef<Path>, class_name: &str, ftype: FileType) -> PathBuf {
     use FileType::*;
     dir.as_ref().join(match ftype {
         Trombi => format!("trombinoscope_{class_name}.pdf"),
