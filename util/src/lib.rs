@@ -99,7 +99,7 @@ impl Dirs {
 
 /// Deduce a class name from the given directory
 fn class_from_dir(dir: impl AsRef<Path>) -> String {
-    let std::path::Component::Normal(class) = dir.as_ref().components().last().unwrap()
+    let std::path::Component::Normal(class) = dir.as_ref().components().next_back().unwrap()
         else { panic!("Last component of `{dir}` cannot be interpreted as a class name", dir = dir.as_ref().display()) };
     class.to_str().unwrap().into()
 }
