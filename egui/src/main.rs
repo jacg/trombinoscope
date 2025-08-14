@@ -20,6 +20,7 @@ use render::trombinoscope;
 use util::{
     ensure_empty_dir, find_jpgs_in_dir, Dirs,
     MAITRES_DE_CLASSE_FILENAME, MAITRES_DE_CLASSE_DEFAULT_CONTENT,
+    CONFIG_FILENAME, DEFAULT_JPEG_QUALITY, DEFAULT_IMAGE_WIDTH,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -50,6 +51,8 @@ struct App {
     dirs: Dirs,
     faces: Vec<Face>,
     maitres_text: String,
+    jpeg_quality: u8,
+    image_width: u32,
 }
 
 impl App {
@@ -75,11 +78,56 @@ impl App {
                 default_content
             });
 
+        let (jpeg_quality, image_width) = Self::load_config(&dirs);
+
         Self {
             dirs,
             faces,
             maitres_text,
+            jpeg_quality,
+            image_width,
         }
+    }
+
+    fn load_config(dirs: &Dirs) -> (u8, u32) {
+        let config_path = dirs.class.join(CONFIG_FILENAME);
+        if let Ok(content) = std::fs::read_to_string(&config_path) {
+            let mut quality = DEFAULT_JPEG_QUALITY;
+            let mut width = DEFAULT_IMAGE_WIDTH;
+
+            for line in content.lines() {
+                if let Some((key, value)) = line.split_once('=') {
+                    match key.trim() {
+                        "jpeg_quality" => {
+                            if let Ok(q) = value.trim().parse::<u8>() {
+                                if q <= 100 {
+                                    quality = q;
+                                }
+                            }
+                        }
+                        "image_width" => {
+                            if let Ok(w) = value.trim().parse::<u32>() {
+                                if (50..=2000).contains(&w) {
+                                    width = w;
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            (quality, width)
+        } else {
+            let default_config = format!("jpeg_quality={}\nimage_width={}\n", DEFAULT_JPEG_QUALITY, DEFAULT_IMAGE_WIDTH);
+            let _ = std::fs::write(&config_path, &default_config);
+            (DEFAULT_JPEG_QUALITY, DEFAULT_IMAGE_WIDTH)
+        }
+    }
+
+    fn save_config(&self) -> std::io::Result<()> {
+        let config_path = self.dirs.class.join(CONFIG_FILENAME);
+        let config_content = format!("jpeg_quality={}\nimage_width={}\n", self.jpeg_quality, self.image_width);
+        std::fs::write(&config_path, &config_content)
     }
 
     pub fn show(&mut self, ui: &mut Ui, ctx: &Context) {
@@ -89,6 +137,15 @@ impl App {
             ui.label("Maîtres de classe :");
             ui.text_edit_singleline(&mut self.maitres_text);
         });
+
+        ui.horizontal(|ui| {
+            ui.label("Qualité JPEG :");
+            ui.add(egui::Slider::new(&mut self.jpeg_quality, 1..=100).suffix("%"));
+            ui.separator();
+            ui.label("Largeur :");
+            ui.add(egui::Slider::new(&mut self.image_width, 50..=1000).suffix("px"));
+        });
+
         ui.separator();
 
         let mut sort = false;
@@ -124,15 +181,19 @@ impl App {
         });
     }
 
+
     fn save_and_regenerate(&self) -> face::Result<()> {
         save_many_face_metadata(&self.faces)?;
 
         let maitres_file_path = self.dirs.class.join(MAITRES_DE_CLASSE_FILENAME);
         std::fs::write(&maitres_file_path, &self.maitres_text)?;
 
+        // Save config settings
+        self.save_config()?;
+
         ensure_empty_dir(&self.dirs.work)?;
         ensure_empty_dir(&self.dirs.render)?;
-        write_many_face_images(&self.faces, &self.dirs.work)?;
+        write_many_face_images(&self.faces, &self.dirs.work, self.jpeg_quality, self.image_width)?;
         trombinoscope(&self.dirs);
         Ok(())
     }
@@ -406,13 +467,15 @@ fn save_many_face_metadata(faces: &[Face]) -> face::Result<()> {
 }
 
 /// Save each cropped face in its own image file in `dir`. Assumes `dir` exists.
-fn write_many_face_images(faces: &[Face], dir: impl AsRef<Path>) -> face::Result<()> {
-    for face in faces { write_one_face_image(face, &dir)?; }
+fn write_many_face_images(faces: &[Face], dir: impl AsRef<Path>, quality: u8, width: u32) -> face::Result<()> {
+    for face in faces {
+        write_one_face_image(face, &dir, quality, width)?;
+    }
     Ok(())
 }
 
 /// Save one cropped face in its own image file in `dir`. Assumes `dir` exists.
-fn write_one_face_image(f: &Face, dir: impl AsRef<Path>) -> face::Result<()> {
+fn write_one_face_image(f: &Face, dir: impl AsRef<Path>, quality: u8, target_width: u32) -> face::Result<()> {
     let (face, source_image) = if let Data::Ready { face, image } = &f.data {
         (face, image)
     } else {
@@ -425,12 +488,9 @@ fn write_one_face_image(f: &Face, dir: impl AsRef<Path>) -> face::Result<()> {
 
     let cropped = crop(source_image, face);
 
-    let target_width  = 200;
     let target_height = (target_width as f32 * ASPECT_RATIO) as u32;
     let resized = cropped.resize(target_width, target_height, image::imageops::FilterType::Lanczos3);
 
-    // Quality range: 0 (smallest file, lowest quality) to 100 (largest file, highest quality)
-    let quality = 15;
     let mut encoder = JpegEncoder::new_with_quality(file, quality);
 
     encoder.encode(
