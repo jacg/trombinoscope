@@ -25,7 +25,7 @@ use util::{
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let cli = cli::parse();
-    let dirs = Dirs::new(cli.class_dir);
+    let dirs = Dirs::new(cli.class_dir, cli.original_photos_subdir);
 
     if cli.strip_metadata { face::metadata::strip_from_jpgs_in_dir(&dirs.photo).unwrap(); }
 

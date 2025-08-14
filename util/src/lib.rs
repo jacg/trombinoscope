@@ -85,10 +85,10 @@ pub struct Dirs {
 }
 
 impl Dirs {
-    pub fn new(class_dir: impl AsRef<Path>) -> Self {
+    pub fn new(class_dir: impl AsRef<Path>, originals: impl AsRef<Path>) -> Self {
         let class: PathBuf = class_dir.as_ref().into();
         Self {
-            photo: class.join("Complet"),
+            photo: class.join(originals),
             render: class.join("Recadré"),
             class,
             work: "/tmp/trombinoscope-working-dir".into(),
