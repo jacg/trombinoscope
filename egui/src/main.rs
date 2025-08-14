@@ -58,7 +58,7 @@ impl App {
         let (tx, rx) = mpsc::channel::<(PathBuf, mpsc::Sender<face::Result<Data>>)>();
         std::thread::spawn(move || {
             for (path, tx) in rx.iter() {
-                tx.send(load_face_data(path));
+                tx.send(load_face_data(path)).unwrap();
             }
         });
 
@@ -112,7 +112,7 @@ impl App {
                     if i.key_pressed(Key::$key) && i.modifiers.matches_exact($(Modifiers::$mod)|*) $body
                 };
             }
-            key!{S (CTRL)  { self.save_and_regenerate(); }}
+            key!{S (CTRL)  { self.save_and_regenerate().unwrap(); }}
             key!{Q (CTRL)  { std::process::exit(0) }} // TODO exit less brutally
         });
     }
@@ -177,7 +177,7 @@ impl Face {
         tx_req: mpsc::Sender<(PathBuf, mpsc::Sender<face::Result<Data>>)>,
     ) -> face::Result<Face> {
         let (tx, rx) = mpsc::channel();
-        tx_req.send((path.as_ref().into(), tx));
+        tx_req.send((path.as_ref().into(), tx)).unwrap();
         let texture_name = path.as_ref().to_string_lossy().to_string();
         let dummy_image = ColorImage::new([400,500], Color32::GRAY);
         let texture = cc.egui_ctx.load_texture(&texture_name, dummy_image, egui::TextureOptions::default());
