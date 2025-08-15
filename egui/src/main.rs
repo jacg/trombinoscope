@@ -100,32 +100,9 @@ impl App {
 
     fn new(dirs: Dirs, cc: &CreationContext) -> Self {
         let (tx, rx) = mpsc::channel::<(PathBuf, mpsc::Sender<face::Result<Data>>)>();
-
         std::thread::spawn(move || {
-            // Collect all incoming requests
-            let mut requests = Vec::new();
-
-            // Get the first request (blocking)
-            if let Ok(first_request) = rx.recv() {
-                requests.push(first_request);
-
-                // Collect any additional requests that arrived quickly
-                while let Ok(request) = rx.try_recv() {
-                    requests.push(request);
-                }
-
-                // Process all requests in parallel
-                requests.par_iter().for_each(|(path, response_tx)| {
-                    let result = load_face_data(path.clone());
-                    let _ = response_tx.send(result);
-                });
-            }
-
-            // Continue processing any late-arriving requests sequentially
-            // (shouldn't happen during normal startup, but handles edge cases)
-            for (path, response_tx) in rx.iter() {
-                let result = load_face_data(path);
-                let _ = response_tx.send(result);
+            for (path, tx) in rx.iter() {
+                tx.send(load_face_data(path)).unwrap();
             }
         });
 
