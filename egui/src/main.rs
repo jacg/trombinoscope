@@ -315,7 +315,7 @@ impl App {
             ui.add(egui::Slider::new(&mut self.jpeg_quality, 1..=100).suffix("%"));
             ui.separator();
             ui.label("Largeur :");
-            ui.add(egui::Slider::new(&mut self.image_width, 50..=1000).suffix("px"));
+            ui.add(egui::Slider::new(&mut self.image_width, 50..=500).suffix("px"));
         });
 
         self.show_pdf_status(ui);
