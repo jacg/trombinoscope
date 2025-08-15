@@ -133,7 +133,7 @@ pub fn move_index_by(index: usize, delta: isize, size: usize) -> usize {
 pub const MAITRES_DE_CLASSE_FILENAME: &str = "maitres-de-classe.txt";
 pub const MAITRES_DE_CLASSE_DEFAULT_CONTENT: &str = "Ajouter MdC, séparés par des virgules";
 pub const CONFIG_FILENAME: &str = "config.txt";
-pub const DEFAULT_JPEG_QUALITY: u8 = 15;
+pub const DEFAULT_JPEG_QUALITY: u8 =  60;
 pub const DEFAULT_IMAGE_WIDTH: u32 = 200;
 
 #[cfg(test)]
