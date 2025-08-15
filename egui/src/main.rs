@@ -8,7 +8,7 @@
 
 // TODO Thumbhash or something else from https://lucasmerlin.github.io/hello_egui/
 
-use std::{fs::File, path::{Path, PathBuf}, sync::mpsc, time::{Duration, Instant}, thread};
+use std::{fs::File, path::{Path, PathBuf}, sync::{mpsc, Arc}, time::{Duration, Instant}, thread};
 
 use eframe::{egui, CreationContext};
 use egui::{Color32, ColorImage, Context, Key, PointerButton, Pos2, Rect, Response, RichText, Sense, TextureHandle, TextureOptions, Ui, Vec2};
@@ -79,7 +79,7 @@ struct SaveData {
 struct FaceData {
     path: PathBuf,
     face: FaceInImage,
-    image: DynamicImage,
+    image: Arc<DynamicImage>,
 }
 
 struct App {
@@ -369,7 +369,7 @@ enum Data {
     Loading(mpsc::Receiver<face::Result<Data>>),
     Ready {
         face: FaceInImage,
-        image: DynamicImage,
+        image: Arc<DynamicImage>,
     },
 }
 
@@ -380,7 +380,7 @@ pub struct Face {
 }
 
 fn load_face_data(path: PathBuf) -> face::Result<Data> {
-    let image = image::open(&path)?;
+    let image = Arc::new(image::open(&path)?);
     let face = FaceInImage::from_path_or_default_for(&path, image.width() as f32, image.height() as f32)?;
     Ok(Data::Ready { face, image })
 }
