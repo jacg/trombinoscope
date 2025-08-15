@@ -13,6 +13,7 @@ use std::{fs::File, path::{Path, PathBuf}, sync::{mpsc, Arc}, time::{Duration, I
 use eframe::{egui, CreationContext};
 use egui::{Color32, ColorImage, Context, Key, PointerButton, Pos2, Rect, Response, RichText, Sense, TextureHandle, TextureOptions, Ui, Vec2};
 use image::{codecs::jpeg::JpegEncoder, DynamicImage};
+use rayon::prelude::*;
 
 use face::{FaceInImage, ASPECT_RATIO};
 use render::{trombinoscope, trombi_file_for_dir};
@@ -666,9 +667,18 @@ fn save_many_face_metadata(face_data: &[FaceData]) -> face::Result<()> {
 
 /// Save each cropped face in its own image file in `dir`. Assumes `dir` exists.
 fn write_many_face_images(face_data: &[FaceData], dir: impl AsRef<Path>, quality: u8, width: u32) -> face::Result<()> {
-    for data in face_data {
-        write_one_face_image(data, &dir, quality, width)?;
+    let dir_path = dir.as_ref().to_path_buf(); // Convert to owned PathBuf for sharing across threads
+
+    let results: Vec<face::Result<()>> = face_data
+        .par_iter()
+        .map(|data| write_one_face_image(data, &dir_path, quality, width))
+        .collect();
+
+    // Return the first error if any occurred
+    for result in results {
+        result?;
     }
+
     Ok(())
 }
 
