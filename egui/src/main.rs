@@ -385,12 +385,13 @@ pub struct Face {
 }
 
 // Parse names from filename in "Given @ Family.jpg" format
+// Also accepts formats without spaces around @
 fn parse_names_from_filename(path: &Path) -> (String, String) {
     let filename = path.file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("");
 
-    if let Some((given, family)) = filename.split_once(" @ ") {
+    if let Some((given, family)) = filename.split_once("@") {
         (given.trim().to_string(), family.trim().to_string())
     } else {
         (String::new(), String::new())
