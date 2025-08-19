@@ -380,11 +380,75 @@ pub struct Face {
     pub path: PathBuf,
     data: Data,
     texture: TextureHandle,
+    last_saved_given: String,
+    last_saved_family: String,
+}
+
+// Parse names from filename in "Given @ Family.jpg" format
+fn parse_names_from_filename(path: &Path) -> (String, String) {
+    let filename = path.file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+
+    if let Some((given, family)) = filename.split_once(" @ ") {
+        (given.trim().to_string(), family.trim().to_string())
+    } else {
+        (String::new(), String::new())
+    }
+}
+
+// Sanitize names for use in filenames
+fn sanitize_name_for_filename(name: &str) -> String {
+    name.chars()
+        .map(|c| match c {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            c => c,
+        })
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+// Create filename from given and family names
+fn create_filename_for_names(given: &str, family: &str) -> String {
+    let given_clean  = sanitize_name_for_filename(given);
+    let family_clean = sanitize_name_for_filename(family);
+
+    if given_clean.is_empty() && family_clean.is_empty() {
+        "Unknown".to_string()
+    } else if given_clean.is_empty() {
+        family_clean
+    } else if family_clean.is_empty() {
+        given_clean
+    } else {
+        format!("{} @ {}", given_clean, family_clean)
+    }
+}
+
+// Rename file to match the given and family names
+fn rename_face_file(old_path: &Path, given: &str, family: &str) -> std::io::Result<PathBuf> {
+    let new_filename = create_filename_for_names(given, family);
+    let extension = old_path.extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("jpg");
+    let new_path = old_path.with_file_name(format!("{}.{}", new_filename, extension));
+
+    if old_path != new_path {
+        std::fs::rename(old_path, &new_path)?;
+    }
+
+    Ok(new_path)
 }
 
 fn load_face_data(path: PathBuf) -> face::Result<Data> {
     let image = Arc::new(image::open(&path)?);
-    let face = FaceInImage::from_path_or_default_for(&path, image.width() as f32, image.height() as f32)?;
+    let (given, family) = parse_names_from_filename(&path);
+
+    // Load face position data from metadata, but get names from filename
+    let mut face = FaceInImage::from_path_or_default_for(&path, image.width() as f32, image.height() as f32)?;
+    face.given  = given;
+    face.family = family;
+
     Ok(Data::Ready { face, image })
 }
 
@@ -400,10 +464,15 @@ impl Face {
         let texture_name = path.as_ref().to_string_lossy().to_string();
         let dummy_image = ColorImage::new([400,500], Color32::GRAY);
         let texture = cc.egui_ctx.load_texture(&texture_name, dummy_image, egui::TextureOptions::default());
+
+        let (initial_given, initial_family) = parse_names_from_filename(path.as_ref());
+
         Ok(Face {
             path: path.as_ref().into(),
             data: Data::Loading(rx),
             texture,
+            last_saved_given:  initial_given,
+            last_saved_family: initial_family,
         })
     }
 
@@ -412,8 +481,18 @@ impl Face {
             let cropped_image = crop(image, face);
             let image_data = adapt_for_texture(&cropped_image);
             self.texture.set(image_data, egui::TextureOptions::default());
+            self.last_saved_given  = face.given.clone();
+            self.last_saved_family = face.family.clone();
             self.data = data;
         }
+    }
+
+    fn rename_for_names(&mut self, given: &str, family: &str) -> std::io::Result<()> {
+        let new_path = rename_face_file(&self.path, given, family)?;
+        self.path = new_path;
+        self.last_saved_given  = given.to_string();
+        self.last_saved_family = family.to_string();
+        Ok(())
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, n_rows: usize) -> bool {
@@ -514,11 +593,16 @@ impl Face {
                     });
                 }
             });
-            match &mut self.data {
+            // Handle UI and track if we need to rename
+            let (lost_focus, names_changed) = match &mut self.data {
                 Data::Ready { face, .. } => {
                     let g = ui.text_edit_singleline(&mut face.given ).on_hover_text("Prénom");
                     let f = ui.text_edit_singleline(&mut face.family).on_hover_text("Nom de famille");
-                    if g.lost_focus() || f.lost_focus() { request_sort = true; }
+
+                    let lost_focus = g.lost_focus() || f.lost_focus();
+                    let names_changed = face.given != self.last_saved_given || face.family != self.last_saved_family;
+
+                    (lost_focus, names_changed)
                 }
                 Data::Loading(rx) => {
                     ctx.request_repaint_after(std::time::Duration::from_millis(10));
@@ -526,6 +610,29 @@ impl Face {
                         Ok(Ok(d)) => { self.install_data(d); request_sort = true; }
                         Ok(Err(face::Error::FaceNotLoaded)) => (),
                         _ => (),
+                    }
+                    (false, false)
+                }
+            };
+
+            // Handle file rename after UI interaction
+            if lost_focus && names_changed {
+                if let Data::Ready { face, .. } = &self.data {
+                    let given = face.given.clone();
+                    let family = face.family.clone();
+
+                    match self.rename_for_names(&given, &family) {
+                        Ok(()) => {
+                            request_sort = true;
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to rename file {}: {}", self.path.display(), e);
+                            // Revert names on error
+                            if let Data::Ready { face, .. } = &mut self.data {
+                                face.given  = self.last_saved_given.clone();
+                                face.family = self.last_saved_family.clone();
+                            }
+                        }
                     }
                 }
             }
@@ -637,7 +744,8 @@ fn save_worker_thread(
 }
 
 fn save_and_regenerate(save_data: SaveData, dirs: &Dirs) -> face::Result<()> {
-    save_many_face_metadata(&save_data.face_data)?;
+    // Only save face position metadata, not names (names are in filenames now)
+    save_face_position_metadata(&save_data.face_data)?;
 
     let maitres_file_path = dirs.class.join(MAITRES_DE_CLASSE_FILENAME);
     std::fs::write(&maitres_file_path, &save_data.maitres_text)?;
@@ -658,11 +766,15 @@ fn save_config(save_data: &SaveData, dirs: &Dirs) -> std::io::Result<()> {
     std::fs::write(&config_path, &config_content)
 }
 
-/// Store the location and name of each face in the JPEG segment of the image
-/// containing the face
-fn save_many_face_metadata(face_data: &[FaceData]) -> face::Result<()> {
+/// Store only the position and cropping info of each face in the JPEG metadata
+/// Names are now stored in filenames, not metadata
+fn save_face_position_metadata(face_data: &[FaceData]) -> face::Result<()> {
     for data in face_data {
-        data.face.embed_in_jpeg(&data.path)?;
+        // Create a copy of the face with empty names for metadata storage
+        let mut face_for_metadata = data.face.clone();
+        face_for_metadata.given  = String::new();
+        face_for_metadata.family = String::new();
+        face_for_metadata.embed_in_jpeg(&data.path)?;
     }
     Ok(())
 }
