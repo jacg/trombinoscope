@@ -360,7 +360,9 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.handle_keys(ctx);
         egui::CentralPanel::default().show(ctx, |ui| {
-            self.show(ui, ctx);
+            egui::ScrollArea::both().show(ui, |ui| {
+                self.show(ui, ctx);
+            });
         });
     }
 }
