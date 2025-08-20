@@ -194,6 +194,44 @@ impl App {
         }
     }
 
+    fn resolve_duplicate_name(&self, given: &str, family: &str, exclude_index: usize) -> (String, String) {
+        let mut candidate_family = family.to_string();
+
+        loop {
+            // Check if this name pair is used by any other face
+            let is_duplicate = self.faces.iter().enumerate()
+                .any(|(i, face)| {
+                    i != exclude_index &&
+                    if let Data::Ready { face, .. } = &face.data {
+                        face.given == given && face.family == candidate_family
+                    } else {
+                        false
+                    }
+                });
+
+            if !is_duplicate {
+                return (given.to_string(), candidate_family);
+            }
+
+            candidate_family.push_str("-dup");
+        }
+    }
+
+    fn apply_name_change(&mut self, face_index: usize, given: &str, family: &str) -> std::io::Result<()> {
+        let face = &mut self.faces[face_index];
+
+        // Update the face data with resolved names
+        if let Data::Ready { face: face_data, .. } = &mut face.data {
+            face_data.given  = given.to_string();
+            face_data.family = family.to_string();
+        }
+
+        // Attempt to rename the file
+        face.rename_for_names(given, family)?;
+
+        Ok(())
+    }
+
     fn request_save(&mut self) {
         let save_data = self.collect_save_data();
 
@@ -323,16 +361,43 @@ impl App {
         ui.separator();
 
         let mut sort = false;
+        let mut name_changes = Vec::new();
         let n_rows = self.faces.len() / 6 + 1;
+
         egui::Grid::new("face grid").show(ui, |ui| {
             for (n, face) in self.faces.iter_mut().enumerate() {
-                if face.show(ui, ctx, n_rows) {
+                let (sort_requested, name_change) = face.show(ui, ctx, n_rows);
+                if sort_requested {
                     sort = true;
+                }
+                if let Some((given, family)) = name_change {
+                    name_changes.push((n, given, family));
                 }
                 if n % 6 == 5 { ui.end_row() }
             }
         });
-        if sort {self. sort();}
+
+        // Process name changes with duplicate resolution
+        for (face_index, given, family) in name_changes {
+            let (final_given, final_family) = self.resolve_duplicate_name(&given, &family, face_index);
+            match self.apply_name_change(face_index, &final_given, &final_family) {
+                Ok(()) => {
+                    sort = true;
+                }
+                Err(e) => {
+                    eprintln!("Failed to rename file: {}", e);
+                    // Revert names on file system error - clone values first to avoid borrow conflicts
+                    let saved_given  = self.faces[face_index].last_saved_given.clone();
+                    let saved_family = self.faces[face_index].last_saved_family.clone();
+                    if let Data::Ready { face, .. } = &mut self.faces[face_index].data {
+                        face.given  = saved_given;
+                        face.family = saved_family;
+                    }
+                }
+            }
+        }
+
+        if sort { self.sort(); }
     }
 
     fn handle_keys(&mut self, ctx: &Context) {
@@ -496,11 +561,13 @@ impl Face {
         Ok(())
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, n_rows: usize) -> bool {
+    pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, n_rows: usize) -> (bool, Option<(String, String)>) {
         let w = ctx.available_rect().width();
         let h = ctx.available_rect().height();
         let top_margin = 10.0;
         let mut request_sort = false;
+        let mut name_change = None;
+
         ui.vertical_centered(|ui| {
             ui.set_width((w / 6.6).min((h-top_margin) / (n_rows as f32 * 5.0 / 3.0)));
             ui.vertical_centered(|ui| {
@@ -575,7 +642,6 @@ impl Face {
                     if response.dragged_by(PointerButton::Primary)   { self.mv(-x, -y); }
                     if response.dragged_by(PointerButton::Secondary) { self.zoom(y); }
                 }
-                //if response.is_pointer_button_down_on() {
                 if response.hovered() {
                     ctx.input(|i| {
                         let mut delta = 5.0;
@@ -594,7 +660,8 @@ impl Face {
                     });
                 }
             });
-            // Handle UI and track if we need to rename
+
+            // Handle UI and track if we need to process name changes
             let (lost_focus, names_changed) = match &mut self.data {
                 Data::Ready { face, .. } => {
                     let g = ui.text_edit_singleline(&mut face.given ).on_hover_text("Prénom");
@@ -616,29 +683,15 @@ impl Face {
                 }
             };
 
-            // Handle file rename after UI interaction
+            // If names changed and focus lost, signal this to the App for processing
             if lost_focus && names_changed {
                 if let Data::Ready { face, .. } = &self.data {
-                    let given = face.given.clone();
-                    let family = face.family.clone();
-
-                    match self.rename_for_names(&given, &family) {
-                        Ok(()) => {
-                            request_sort = true;
-                        }
-                        Err(e) => {
-                            eprintln!("Failed to rename file {}: {}", self.path.display(), e);
-                            // Revert names on error
-                            if let Data::Ready { face, .. } = &mut self.data {
-                                face.given  = self.last_saved_given.clone();
-                                face.family = self.last_saved_family.clone();
-                            }
-                        }
-                    }
+                    name_change = Some((face.given.clone(), face.family.clone()));
                 }
             }
         });
-        request_sort
+
+        (request_sort, name_change)
     }
 
     pub fn centre_on_pointer(&mut self, response: &Response) {
