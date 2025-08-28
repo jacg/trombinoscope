@@ -528,7 +528,7 @@ impl Face {
         let (tx, rx) = mpsc::channel();
         tx_req.send((path.as_ref().into(), tx)).unwrap();
         let texture_name = path.as_ref().to_string_lossy().to_string();
-        let dummy_image = ColorImage::new([400,500], Color32::GRAY);
+        let dummy_image = ColorImage::filled([400,500], Color32::GRAY);
         let texture = cc.egui_ctx.load_texture(&texture_name, dummy_image, egui::TextureOptions::default());
 
         let (initial_given, initial_family) = parse_names_from_filename(path.as_ref());
