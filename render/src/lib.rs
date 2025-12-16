@@ -295,6 +295,7 @@ fn trombi_typst_src(items: &[Item], dir: &Dirs) -> String {
         })
         .collect::<Vec<_>>()
         .join(",\n");
+    let n_columns = if items.len() <= 24 { 6 } else { 7 };
     let class_name = dir.class_name();
 
     let maitres_de_classe_file_location = dir.class.join(MAITRES_DE_CLASSE_FILENAME);
@@ -331,7 +332,7 @@ fn trombi_typst_src(items: &[Item], dir: &Dirs) -> String {
     #text(family, stroke: none, fill: colF)
 ]
 
-#let n_columns = 6
+#let n_columns = {n_columns}
 #let pic_w = 200mm / n_columns
 #let pic_h = pic_w * 5 / 4
 
