@@ -7,6 +7,7 @@ use std::{
 };
 
 use comemo::Prehashed;
+use snafu::{OptionExt, ResultExt};
 
 use typst::{
     diag::{FileError, FileResult, PackageError, PackageResult},
@@ -22,6 +23,13 @@ use util::{
     MAITRES_DE_CLASSE_FILENAME, MAITRES_DE_CLASSE_DEFAULT_CONTENT,
     find_jpgs_in_dir, path_to_item, sort_key, unix_rm_rf, unix_mv,
 };
+
+mod error;
+use error::{
+    LoadFontSnafu, ReadMaitresDeClasseSnafu, WriteMaitresDeClasseSnafu, WriteTypstSrcSnafu,
+    CompileTypstSnafu, WritePdfSnafu, CopyPdfSnafu,
+};
+pub use error::{Error, Result};
 
 /// Main interface that determines the environment for Typst.
 pub struct TypstWrapperWorld {
@@ -54,10 +62,10 @@ pub struct TypstWrapperWorld {
 }
 
 impl TypstWrapperWorld {
-    pub fn new(root: String, source: String) -> Self {
-        let fonts = fonts();
+    pub fn new(root: String, source: String) -> Result<Self> {
+        let fonts = fonts()?;
 
-        Self {
+        Ok(Self {
             library: Prehashed::new(Library::default()),
             book: Prehashed::new(FontBook::from_fonts(&fonts)),
             root: PathBuf::from(root),
@@ -69,7 +77,7 @@ impl TypstWrapperWorld {
                 .unwrap_or(std::env::temp_dir()),
             http: ureq::Agent::new(),
             files: RefCell::new(HashMap::new()),
-        }
+        })
     }
 }
 impl TypstWrapperWorld {
@@ -225,10 +233,10 @@ impl FileEntry {
     }
 }
 
-pub fn fonts() -> Vec<Font> {
+pub fn fonts() -> Result<Vec<Font>> {
     let bytes = include_bytes!("../../fonts/Inconsolata-Black.ttf");
     let buffer = Bytes::from_static(bytes);
-    vec![Font::new(buffer, 0).unwrap()]
+    Ok(vec![Font::new(buffer, 0).context(LoadFontSnafu)?])
 }
 
 pub fn retry<T, E>(mut f: impl FnMut() -> Result<T, E>) -> Result<T, E> {
@@ -244,7 +252,7 @@ pub fn http_successful(status: u16) -> bool {
     status / 100 == 2
 }
 
-fn trombi_typst_src(items: &[Item], dir: &Dirs) -> String {
+fn trombi_typst_src(items: &[Item], dir: &Dirs) -> Result<String> {
     let table_items = items
         .iter()
         .map(|Item { image, name: Name { given, family } }| {
@@ -253,14 +261,16 @@ fn trombi_typst_src(items: &[Item], dir: &Dirs) -> String {
         .collect::<Vec<_>>()
         .join(",\n");
     let n_columns = if items.len() <= 24 { 6 } else { 7 };
-    let class_name = dir.class_name();
+    let class_name = &dir.class_name;
 
     let maitres_de_classe_file_location = dir.class.join(MAITRES_DE_CLASSE_FILENAME);
     let maitres_de_classe = match fs::read_to_string(&maitres_de_classe_file_location) {
         Ok(content) => content,
         Err(_) => {
-            fs::write(&maitres_de_classe_file_location, MAITRES_DE_CLASSE_DEFAULT_CONTENT).unwrap();
-            fs::read_to_string(&maitres_de_classe_file_location).unwrap()
+            fs::write(&maitres_de_classe_file_location, MAITRES_DE_CLASSE_DEFAULT_CONTENT)
+                .context(WriteMaitresDeClasseSnafu { path: &maitres_de_classe_file_location })?;
+            fs::read_to_string(&maitres_de_classe_file_location)
+                .context(ReadMaitresDeClasseSnafu { path: &maitres_de_classe_file_location })?
         }
     }
     .split(',')
@@ -269,7 +279,7 @@ fn trombi_typst_src(items: &[Item], dir: &Dirs) -> String {
     .collect::<Vec<_>>()
     .join(" - ");
 
-    format!(r#"#set page(
+    Ok(format!(r#"#set page(
   paper: "a4",
   margin: (top: 10mm, bottom: 4mm, left: 5mm, right: 5mm),
 )
@@ -320,44 +330,44 @@ fn trombi_typst_src(items: &[Item], dir: &Dirs) -> String {
 
 {table_items}
 )
-"#)
+"#))
 
 }
 
 fn render(
     content: String,
     dir: &Dirs,
-) {
-    let class_name = dir.class_name();
+) -> Result<()> {
+    let class_name = &dir.class_name;
     let typst_src_filename = format!("generated-tombinoscope_{class_name}.typ");
 
     let typst_src_path = dir.work.join(&typst_src_filename);
-    let mut out = File::create(typst_src_path).unwrap();
-    out.write_all(content.as_bytes()).unwrap();
+    let mut out = File::create(&typst_src_path).context(WriteTypstSrcSnafu { path: &typst_src_path })?;
+    out.write_all(content.as_bytes()).context(WriteTypstSrcSnafu { path: &typst_src_path })?;
 
     // Create world with content.
-    let world = TypstWrapperWorld::new(dir.work.display().to_string(), content.clone());
+    let world = TypstWrapperWorld::new(dir.work.display().to_string(), content.clone())?;
 
     // Render document
     let mut tracer = Tracer::default();
     let document = typst::compile(&world, &mut tracer)
-        .unwrap_or_else(|err| {
-            panic!("\nError compiling typst source `{typst_src_filename}`:\n{err:?}\n")
-        });
+        .map_err(|err| CompileTypstSnafu {
+            message: format!("{err:?}"),
+            src_filename: typst_src_filename.clone(),
+        }.build())?;
 
     // Output to pdf
     let pdf_bytes = typst_pdf::pdf(&document, Smart::Auto, None);
 
-    let pdf_path = trombi_file_for_dir(&dir.work, &dir.class_name());
-    let pdf_path_display = pdf_path.display();
+    let pdf_path = trombi_file_for_dir(&dir.work, &dir.class_name);
 
-    fs::write(&pdf_path, pdf_bytes)
-        .unwrap_or_else(|err| panic!("Error writing {pdf_path_display}:\n{err:?}"));
+    fs::write(&pdf_path, pdf_bytes).context(WritePdfSnafu { path: &pdf_path })?;
 
-    let moved_pdf_path = trombi_file_for_dir(&dir.class, &dir.class_name());
+    let moved_pdf_path = trombi_file_for_dir(&dir.class, &dir.class_name);
     let moved_pdf_path_display = moved_pdf_path.display();
     let msg = &format!("PDF généré: `{moved_pdf_path_display}`.");
     println!("{msg}");
+    Ok(())
 }
 
 
@@ -366,9 +376,8 @@ pub fn trombi_file_for_dir(dir: impl AsRef<Path>, class_name: &str) -> PathBuf {
 }
 
 
-pub fn trombinoscope(dir: &Dirs) {
-    let items = find_jpgs_in_dir(&dir.work)
-        .unwrap_or_else(|err| panic!("{err}"))
+pub fn trombinoscope(dir: &Dirs) -> Result<()> {
+    let items = find_jpgs_in_dir(&dir.work)?
         .iter()
         .filter_map(path_to_item)
         .collect::<Vec<_>>();
@@ -376,13 +385,14 @@ pub fn trombinoscope(dir: &Dirs) {
     let mut items = items.to_vec();
     items.sort_by_cached_key(|f| sort_key(&f.name.given, &f.name.family));
 
-    render(trombi_typst_src(&items, dir), dir);
+    render(trombi_typst_src(&items, dir)?, dir)?;
 
-    unix_rm_rf(&dir.render).unwrap();
-    unix_mv(&dir.work, &dir.render).unwrap();
+    unix_rm_rf(&dir.render)?;
+    unix_mv(&dir.work, &dir.render)?;
 
-    fs::copy(
-        trombi_file_for_dir(&dir.render, &dir.class_name()),
-        trombi_file_for_dir(&dir.class , &dir.class_name()),
-    ).unwrap();
+    let from = trombi_file_for_dir(&dir.render, &dir.class_name);
+    let to   = trombi_file_for_dir(&dir.class , &dir.class_name);
+    fs::copy(&from, &to).context(CopyPdfSnafu { from, to })?;
+
+    Ok(())
 }

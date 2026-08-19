@@ -14,6 +14,7 @@ use eframe::{egui, CreationContext};
 use egui::{Color32, ColorImage, Context, Key, PointerButton, Pos2, Rect, Response, RichText, Sense, TextureHandle, TextureOptions, Ui, Vec2};
 use image::{codecs::jpeg::JpegEncoder, DynamicImage};
 use rayon::prelude::*;
+use snafu::ResultExt;
 
 use face::{FaceInImage, ASPECT_RATIO};
 use render::{trombinoscope, trombi_file_for_dir};
@@ -23,10 +24,14 @@ use util::{
     CONFIG_FILENAME, DEFAULT_JPEG_QUALITY, DEFAULT_IMAGE_WIDTH,
 };
 
+mod error;
+use error::{CreateFileSnafu, WriteFileSnafu, RenameFileSnafu, EncodeJpegSnafu};
+pub use error::{Error, Result};
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let cli = cli::parse();
-    let dirs = Dirs::new(cli.class_dir, cli.original_photos_subdir);
+    let dirs = Dirs::new(cli.class_dir, cli.original_photos_subdir)?;
 
     if cli.strip_metadata { face::metadata::strip_from_jpgs_in_dir(&dirs.photo)?; }
 
@@ -41,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     eframe::run_native(
         "Trombinoscope",
         options,
-        Box::new(|cc| Ok(Box::<App>::new(App::new(dirs, cc)))),
+        Box::new(|cc| Ok(Box::new(App::try_new(dirs, cc)?))),
     )?;
 
     Ok(())
@@ -97,19 +102,18 @@ struct App {
 
 impl App {
 
-    fn new(dirs: Dirs, cc: &CreationContext) -> Self {
+    fn try_new(dirs: Dirs, cc: &CreationContext) -> Result<Self> {
         let (tx, rx) = mpsc::channel::<(PathBuf, mpsc::Sender<face::Result<Data>>)>();
         std::thread::spawn(move || {
             for (path, tx) in rx.iter() {
-                tx.send(load_face_data(path)).unwrap();
+                let _ = tx.send(load_face_data(path));
             }
         });
 
-        let faces = find_jpgs_in_dir(&dirs.photo)
-            .unwrap_or_else(|err| panic!("{err}"))
+        let faces = find_jpgs_in_dir(&dirs.photo)?
             .into_iter()
-            .map(move |path| { Face::load(path, cc, tx.clone()).unwrap() })
-            .collect();
+            .map(move |path| Face::load(path, cc, tx.clone()))
+            .collect::<face::Result<Vec<_>>>()?;
 
         let maitres_file_path = dirs.class.join(MAITRES_DE_CLASSE_FILENAME);
         let maitres_text = std::fs::read_to_string(&maitres_file_path)
@@ -133,7 +137,7 @@ impl App {
         // Check initial PDF status
         let pdf_status = Self::check_pdf_status(&dirs);
 
-        Self {
+        Ok(Self {
             dirs,
             faces,
             maitres_text,
@@ -142,12 +146,12 @@ impl App {
             pdf_status,
             save_request_tx,
             save_response_rx,
-        }
+        })
     }
 
     fn check_pdf_status(dirs: &Dirs) -> PdfStatus {
         // Look for trombinoscope PDF in the class directory
-        let trombi_path = trombi_file_for_dir(&dirs.class, &dirs.class_name());
+        let trombi_path = trombi_file_for_dir(&dirs.class, &dirs.class_name);
 
         if let Ok(metadata) = std::fs::metadata(&trombi_path) {
             PdfStatus::Ready {
@@ -217,7 +221,7 @@ impl App {
         }
     }
 
-    fn apply_name_change(&mut self, face_index: usize, given: &str, family: &str) -> std::io::Result<()> {
+    fn apply_name_change(&mut self, face_index: usize, given: &str, family: &str) -> Result<()> {
         let face = &mut self.faces[face_index];
 
         // Update the face data with resolved names
@@ -302,7 +306,7 @@ impl App {
     }
 
     fn get_pdf_size(&self) -> Option<u64> {
-        let trombi_path = trombi_file_for_dir(&self.dirs.class, &self.dirs.class_name());
+        let trombi_path = trombi_file_for_dir(&self.dirs.class, &self.dirs.class_name);
         std::fs::metadata(&trombi_path).ok()?.len().into()
     }
 
@@ -341,7 +345,7 @@ impl App {
             _ => {}
         }
 
-        ui.heading("Classe".to_owned() + &self.dirs.class_name());
+        ui.heading("Classe".to_owned() + &self.dirs.class_name);
 
         ui.horizontal(|ui| {
             ui.label("Maîtres de classe :");
@@ -492,7 +496,7 @@ fn create_filename_for_names(given: &str, family: &str) -> String {
 }
 
 // Rename file to match the given and family names
-fn rename_face_file(old_path: &Path, given: &str, family: &str) -> std::io::Result<PathBuf> {
+fn rename_face_file(old_path: &Path, given: &str, family: &str) -> Result<PathBuf> {
     let new_filename = create_filename_for_names(given, family);
     let extension = old_path.extension()
         .and_then(|ext| ext.to_str())
@@ -500,7 +504,8 @@ fn rename_face_file(old_path: &Path, given: &str, family: &str) -> std::io::Resu
     let new_path = old_path.with_file_name(format!("{}.{}", new_filename, extension));
 
     if old_path != new_path {
-        std::fs::rename(old_path, &new_path)?;
+        std::fs::rename(old_path, &new_path)
+            .context(RenameFileSnafu { from: old_path, to: &new_path })?;
     }
 
     Ok(new_path)
@@ -526,7 +531,7 @@ impl Face {
         tx_req: mpsc::Sender<(PathBuf, mpsc::Sender<face::Result<Data>>)>,
     ) -> face::Result<Face> {
         let (tx, rx) = mpsc::channel();
-        tx_req.send((path.as_ref().into(), tx)).unwrap();
+        let _ = tx_req.send((path.as_ref().into(), tx));
         let texture_name = path.as_ref().to_string_lossy().to_string();
         let dummy_image = ColorImage::filled([400,500], Color32::GRAY);
         let texture = cc.egui_ctx.load_texture(&texture_name, dummy_image, egui::TextureOptions::default());
@@ -553,7 +558,7 @@ impl Face {
         }
     }
 
-    fn rename_for_names(&mut self, given: &str, family: &str) -> std::io::Result<()> {
+    fn rename_for_names(&mut self, given: &str, family: &str) -> Result<()> {
         let new_path = rename_face_file(&self.path, given, family)?;
         self.path = new_path;
         self.last_saved_given  = given.to_string();
@@ -797,12 +802,13 @@ fn save_worker_thread(
     }
 }
 
-fn save_and_regenerate(save_data: SaveData, dirs: &Dirs) -> face::Result<()> {
+fn save_and_regenerate(save_data: SaveData, dirs: &Dirs) -> Result<()> {
     // Only save face position metadata, not names (names are in filenames now)
     save_face_position_metadata(&save_data.face_data)?;
 
     let maitres_file_path = dirs.class.join(MAITRES_DE_CLASSE_FILENAME);
-    std::fs::write(&maitres_file_path, &save_data.maitres_text)?;
+    std::fs::write(&maitres_file_path, &save_data.maitres_text)
+        .context(WriteFileSnafu { path: &maitres_file_path })?;
 
     // Save config settings
     save_config(&save_data, dirs)?;
@@ -810,19 +816,20 @@ fn save_and_regenerate(save_data: SaveData, dirs: &Dirs) -> face::Result<()> {
     ensure_empty_dir(&dirs.work)?;
     ensure_empty_dir(&dirs.render)?;
     write_many_face_images(&save_data.face_data, &dirs.work, save_data.jpeg_quality, save_data.image_width)?;
-    trombinoscope(dirs);
+    trombinoscope(dirs)?;
     Ok(())
 }
 
-fn save_config(save_data: &SaveData, dirs: &Dirs) -> std::io::Result<()> {
+fn save_config(save_data: &SaveData, dirs: &Dirs) -> Result<()> {
     let config_path = dirs.class.join(CONFIG_FILENAME);
     let config_content = format!("jpeg_quality={}\nimage_width={}\n", save_data.jpeg_quality, save_data.image_width);
-    std::fs::write(&config_path, &config_content)
+    std::fs::write(&config_path, &config_content).context(WriteFileSnafu { path: &config_path })?;
+    Ok(())
 }
 
 /// Store only the position and cropping info of each face in the JPEG metadata
 /// Names are now stored in filenames, not metadata
-fn save_face_position_metadata(face_data: &[FaceData]) -> face::Result<()> {
+fn save_face_position_metadata(face_data: &[FaceData]) -> Result<()> {
     for data in face_data {
         // Create a copy of the face with empty names for metadata storage
         let mut face_for_metadata = data.face.clone();
@@ -834,10 +841,10 @@ fn save_face_position_metadata(face_data: &[FaceData]) -> face::Result<()> {
 }
 
 /// Save each cropped face in its own image file in `dir`. Assumes `dir` exists.
-fn write_many_face_images(face_data: &[FaceData], dir: impl AsRef<Path>, quality: u8, width: u32) -> face::Result<()> {
+fn write_many_face_images(face_data: &[FaceData], dir: impl AsRef<Path>, quality: u8, width: u32) -> Result<()> {
     let dir_path = dir.as_ref().to_path_buf(); // Convert to owned PathBuf for sharing across threads
 
-    let results: Vec<face::Result<()>> = face_data
+    let results: Vec<Result<()>> = face_data
         .par_iter()
         .map(|data| write_one_face_image(data, &dir_path, quality, width))
         .collect();
@@ -851,10 +858,10 @@ fn write_many_face_images(face_data: &[FaceData], dir: impl AsRef<Path>, quality
 }
 
 /// Save one cropped face in its own image file in `dir`. Assumes `dir` exists.
-fn write_one_face_image(data: &FaceData, dir: impl AsRef<Path>, quality: u8, target_width: u32) -> face::Result<()> {
+fn write_one_face_image(data: &FaceData, dir: impl AsRef<Path>, quality: u8, target_width: u32) -> Result<()> {
     let filename = format!("{} @ {}.jpg", &data.face.given, &data.face.family);
     let path = dir.as_ref().join(&filename);
-    let file = &mut File::create(path)?;
+    let file = &mut File::create(&path).context(CreateFileSnafu { path: &path })?;
 
     let cropped = crop(&data.image, &data.face);
 
@@ -868,6 +875,6 @@ fn write_one_face_image(data: &FaceData, dir: impl AsRef<Path>, quality: u8, tar
         target_width,
         target_height,
         image::ExtendedColorType::Rgb8
-    )?;
+    ).context(EncodeJpegSnafu { path: &path })?;
     Ok(())
 }

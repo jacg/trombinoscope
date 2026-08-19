@@ -6,11 +6,12 @@ use std::{
 
 use bitcode::{Decode, Encode};
 use img_parts::jpeg::{self, Jpeg, JpegSegment};
+use snafu::ResultExt;
 
 use util::{basename_stem, filename_to_given_family, read_jpeg, write_jpeg};
 
 use crate::{
-    error::{Error, Result},
+    error::{Error, Result, NoMetadataFoundSnafu, CreateFileSnafu, WriteStdoutSnafu, ReadKeySnafu},
     ASPECT_RATIO,
 };
 
@@ -58,7 +59,7 @@ impl FaceInImage {
     pub fn from_path_or_default_for(path: impl AsRef<Path>, width: f32, height: f32) -> Result<Self> {
         Ok(match FaceInImage::from_jpeg_in_file(&path) {
             Ok(face) => face,
-            Err(Error::NoMetadataFound(_)) => {
+            Err(Error::NoMetadataFound { .. }) => {
                 let mut face = FaceInImage::default_for(width, height, &path);
                 if let Some((given, family)) = filename_to_given_family(path) {
                     face.given = given;
@@ -66,7 +67,7 @@ impl FaceInImage {
                 }
                 face
             }
-            Err(Error::Bitcode(_)) => panic!("Old metadata ?"),
+            Err(Error::Bitcode { .. }) => panic!("Old metadata ?"),
             err => err?,
         })
     }
@@ -75,7 +76,7 @@ impl FaceInImage {
         jpeg
             .segment_by_marker(OUR_MARKER) // TODO, use OUR_LABEL to avoid collisions with other apps using OUR_MARKER
             .map_or_else(
-                || Err(Error::NoMetadataFound(msg.into())),
+                || NoMetadataFoundSnafu { location: msg }.fail(),
                 Self::from_jpeg_segment)
     }
 
@@ -115,7 +116,7 @@ impl FaceInImage {
             let new_pos = all_segments.len() - 1; // Hack around https://github.com/paolobarbolini/img-parts/issues/12
             all_segments.insert(new_pos, new_segment);
         };
-        let file = &mut File::create(path)?;
+        let file = &mut File::create(path.as_ref()).context(CreateFileSnafu { path: path.as_ref() })?;
         write_jpeg(jpeg, file)?;
         Ok(())
     }
@@ -123,7 +124,7 @@ impl FaceInImage {
     pub fn strip_from_jpeg(path: impl AsRef<Path>) -> Result<()> {
         let mut jpeg = read_jpeg(&path)?;
         jpeg.remove_segments_by_marker(OUR_MARKER);
-        let file = &mut File::create(path)?;
+        let file = &mut File::create(path.as_ref()).context(CreateFileSnafu { path: path.as_ref() })?;
         write_jpeg(jpeg, file)?;
         Ok(())
     }
@@ -138,8 +139,8 @@ pub fn strip_from_jpgs_in_dir(dir: impl AsRef<Path>) -> Result<()> {
     stdout.write_all(b"\n\nARE YOU SURE THAT YOU WANT TO STRIP METADATA ?  This cannot be undone!
 To continue with stripped metadata, press '@'.
 Otherwise press any other key and rerun the program without the `--strip-metadata option`
-").unwrap();
-    if stdout.read_key().unwrap() != console::Key::Char('@') {
+").context(WriteStdoutSnafu)?;
+    if stdout.read_key().context(ReadKeySnafu)? != console::Key::Char('@') {
         println!("\nNot stripping metadata. Stopping. Rerun without `--strip-metadata`.");
         std::process::exit(0);
     } else {

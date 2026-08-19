@@ -1,14 +1,18 @@
 use std::{
-    io::{self, Write},
+    io::Write,
     ffi::OsStr,
     path::{Path, PathBuf},
+    process,
 };
 
 use img_parts::jpeg::Jpeg;
-use snafu::ResultExt;
+use snafu::{OptionExt, ResultExt};
 
 mod error;
-use error::{ReadDirSnafu, ReadDirEntrySnafu, ReadImageSnafu, EncodeJpegSnafu, DecodeJpegSnafu};
+use error::{
+    ReadDirSnafu, ReadDirEntrySnafu, ReadImageSnafu, EncodeJpegSnafu, DecodeJpegSnafu,
+    NotAClassNameSnafu, NonUtf8ClassNameSnafu, RunCommandSnafu, CommandFailedSnafu,
+};
 pub use error::{Error, Result};
 
 /// Extract the non-extension part of the final component of `path`
@@ -32,30 +36,41 @@ pub fn filename_to_given_family(path: impl AsRef<Path>) -> Option<(String, Strin
     ))
 }
 
+/// Run `cmd`, reporting an error if it could not be spawned, or exited unsuccessfully
+fn run_checked(cmd: &mut process::Command) -> Result<()> {
+    let command = format!("{cmd:?}");
+    let output = cmd.output().context(RunCommandSnafu { command: command.clone() })?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        return CommandFailedSnafu { command, stderr }.fail();
+    }
+    Ok(())
+}
+
 /// Make sure given directory exists and is empty, deleting previous contents
-pub fn ensure_empty_dir(dir: impl AsRef<Path>) -> std::io::Result<()> {
+pub fn ensure_empty_dir(dir: impl AsRef<Path>) -> Result<()> {
     let dir = dir.as_ref().as_os_str();
-    std::process::Command::new("rm")   .arg("-rf").arg(dir).output()?;
-    std::process::Command::new("mkdir").arg("-p" ).arg(dir).output()?;
+    run_checked(process::Command::new("rm")   .arg("-rf").arg(dir))?;
+    run_checked(process::Command::new("mkdir").arg("-p" ).arg(dir))?;
     Ok(())
 }
 
 /// Use the underlying UNIX-like OS' `mv` command
-pub fn unix_mv(from: impl AsRef<Path>, to: impl AsRef<Path>) -> io::Result<()> {
-    std::process::Command::new("mv")
-        .arg(from.as_ref().as_os_str())
-        .arg(  to.as_ref().as_os_str())
-        .output()?;
-    Ok(())
+pub fn unix_mv(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {
+    run_checked(
+        process::Command::new("mv")
+            .arg(from.as_ref().as_os_str())
+            .arg(  to.as_ref().as_os_str())
+    )
 }
 
 /// Use the underlying UNIX-like OS' `rm -rf` command
-pub fn unix_rm_rf(path: impl AsRef<Path>) -> io::Result<()> {
-    std::process::Command::new("rm")
-        .arg(path.as_ref().as_os_str())
-        .arg("-rf")
-        .output()?;
-    Ok(())
+pub fn unix_rm_rf(path: impl AsRef<Path>) -> Result<()> {
+    run_checked(
+        process::Command::new("rm")
+            .arg(path.as_ref().as_os_str())
+            .arg("-rf")
+    )
 }
 
 /// Return a `Vec` of files in given directory, which have a filename extension
@@ -89,26 +104,30 @@ pub struct Dirs {
     pub photo: PathBuf,
     pub render: PathBuf,
     pub work: PathBuf,
+    pub class_name: String,
 }
 
 impl Dirs {
-    pub fn new(class_dir: impl AsRef<Path>, originals: impl AsRef<Path>) -> Self {
+    pub fn new(class_dir: impl AsRef<Path>, originals: impl AsRef<Path>) -> Result<Self> {
         let class: PathBuf = class_dir.as_ref().into();
-        Self {
+        let class_name = class_from_dir(&class)?;
+        Ok(Self {
             photo: class.join(originals),
             render: class.join("Recadré"),
             class,
             work: "/tmp/trombinoscope-working-dir".into(),
-        }
+            class_name,
+        })
     }
-    pub fn class_name(&self) -> String { class_from_dir(&self.class)  }
 }
 
 /// Deduce a class name from the given directory
-fn class_from_dir(dir: impl AsRef<Path>) -> String {
-    let std::path::Component::Normal(class) = dir.as_ref().components().next_back().unwrap()
-        else { panic!("Last component of `{dir}` cannot be interpreted as a class name", dir = dir.as_ref().display()) };
-    class.to_str().unwrap().into()
+fn class_from_dir(dir: impl AsRef<Path>) -> Result<String> {
+    let dir = dir.as_ref();
+    let component = dir.components().next_back().context(NotAClassNameSnafu { dir })?;
+    let std::path::Component::Normal(class) = component
+        else { return NotAClassNameSnafu { dir }.fail() };
+    Ok(class.to_str().context(NonUtf8ClassNameSnafu { dir })?.into())
 }
 
 #[derive(Debug, Clone)] pub struct Name { pub given: String, pub family: String }

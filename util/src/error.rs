@@ -20,6 +20,18 @@ pub enum Error {
 
     #[snafu(display("Does not look like a valid JPEG: {source}"))]
     DecodeJpeg { source: img_parts::Error },
+
+    #[snafu(display("Last component of `{}` cannot be interpreted as a class name", dir.display()))]
+    NotAClassName { dir: PathBuf },
+
+    #[snafu(display("Last component of `{}` is not valid UTF-8", dir.display()))]
+    NonUtf8ClassName { dir: PathBuf },
+
+    #[snafu(display("Could not run `{command}`: {source}"))]
+    RunCommand { source: io::Error, command: String },
+
+    #[snafu(display("`{command}` failed:\n{stderr}"))]
+    CommandFailed { command: String, stderr: String },
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

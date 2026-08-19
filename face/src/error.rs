@@ -1,37 +1,38 @@
-use std::{ffi::OsString, path::PathBuf};
+use std::path::PathBuf;
 
-use thiserror::Error;
+use snafu::Snafu;
 
-#[derive(Debug, Error)]
-pub enum Error{
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub(crate)))]
+pub enum Error {
 
-    #[error("No face metadata was found in {0}")]
-    NoMetadataFound(String),
+    #[snafu(display("No face metadata was found in {location}"))]
+    NoMetadataFound { location: String },
 
-    #[error("Something went wrong in our use of `bitcode`. Old metadata version? If so, strip")]
-    Bitcode(#[from] bitcode::Error),
+    #[snafu(display("Something went wrong in our use of `bitcode`. Old metadata version? If so, strip"), context(false))]
+    Bitcode { source: bitcode::Error },
 
-    #[error("Could not find basename in {0}")]
-    NoBaseName(PathBuf),
+    #[snafu(display("Could not find basename in `{}`", path.display()))]
+    NoBaseName { path: PathBuf },
 
-    #[error("TODO OsString error description")]
-    Abcd(OsString),
-
-    #[error("Face not loaded yet")]
+    #[snafu(display("Face not loaded yet"))]
     FaceNotLoaded,
 
-    #[error("TODO io::Error description")]
-    XXX(#[from] std::io::Error),
+    #[snafu(display("Could not create `{}`: {source}", path.display()))]
+    CreateFile { source: std::io::Error, path: PathBuf },
 
-    #[error(transparent)]
-    Util(#[from] util::Error),
+    #[snafu(display("Could not write to stdout: {source}"))]
+    WriteStdout { source: std::io::Error },
+
+    #[snafu(display("Could not read a key from stdin: {source}"))]
+    ReadKey { source: std::io::Error },
 
     // TODO: this is probably too backend-specific to appear here
-    #[error("Something went wrong in our use of `image`")]
-    Image(#[from] image::ImageError),
+    #[snafu(display("Something went wrong in our use of `image`"), context(false))]
+    Image { source: image::ImageError },
 
-    #[error("This has not been implemented yet")]
-    Todo,
+    #[snafu(context(false))]
+    Util { source: util::Error },
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T, E = Error> = std::result::Result<T, E>;
