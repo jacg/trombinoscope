@@ -48,6 +48,7 @@
             pkgs.libxi
             pkgs.libxrandr
             pkgs.vulkan-loader
+            pkgs.wayland
           ];
 
         in
