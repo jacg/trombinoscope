@@ -155,11 +155,20 @@ impl BootstrapConfirm {
                 }
 
                 ui.add_space(48.0);
-                let button = egui::Button::new(RichText::new("Continuer").size(30.0).strong())
+                let confirm = egui::Button::new(RichText::new("Continuer").size(30.0).strong())
                     .min_size(Vec2::new(280.0, 70.0))
                     .fill(Color32::from_rgb(40, 130, 60));
-                if ui.add(button).clicked() {
+                if ui.add(confirm).clicked() {
                     confirmed = true;
+                }
+
+                ui.add_space(16.0);
+                let cancel = egui::Button::new(RichText::new("Annuler").size(30.0).strong())
+                    .min_size(Vec2::new(200.0, 70.0))
+                    .fill(Color32::from_rgb(160, 40, 40));
+                if ui.add(cancel).clicked() {
+                    // Nothing has been touched yet at this point, so quitting is enough.
+                    std::process::exit(0);
                 }
             });
         });
