@@ -11,7 +11,7 @@
 use std::{fs::File, path::{Path, PathBuf}, sync::{mpsc, Arc}, time::{Duration, Instant}, thread};
 
 use eframe::egui;
-use egui::{Color32, ColorImage, Context, Key, PointerButton, Popup, PopupCloseBehavior, Pos2, Rect, Response, RichText, Sense, TextureHandle, TextureOptions, Ui, Vec2};
+use egui::{Color32, ColorImage, Context, Id, Key, PointerButton, Popup, PopupCloseBehavior, Pos2, Rect, Response, RichText, Sense, TextEdit, TextureHandle, TextureOptions, Ui, Vec2};
 use image::{codecs::jpeg::JpegEncoder, DynamicImage};
 use rayon::prelude::*;
 use snafu::ResultExt;
@@ -56,6 +56,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Trombinoscope",
         options,
         Box::new(move |cc| {
+            // Text-edit fields (given/family name boxes) draw their focus ring using
+            // `visuals.selection.stroke`; the theme default is thin and low-contrast
+            // against a grid of photos, making it easy to lose track of which box has
+            // focus. Bump it once, globally, to something unmissable.
+            cc.egui_ctx.style_mut(|style| {
+                style.visuals.selection.stroke = egui::Stroke::new(3.0, Color32::from_rgb(255, 200, 0));
+            });
             Ok(Box::new(TopApp::new(dirs, originals_subdir, situation, strip_metadata, &cc.egui_ctx)?))
         }),
     )?;
@@ -630,6 +637,12 @@ pub struct Face {
     texture: TextureHandle,
     last_saved_given: String,
     last_saved_family: String,
+    /// Stable across both re-sorts (position in `App::faces` changes) and renames
+    /// (the filename itself changes), unlike `path` or grid position. Used to key
+    /// this face's name-field widget ids, so that keyboard focus — which egui tracks
+    /// purely by id — stays attached to "this face's box" rather than "whatever now
+    /// occupies this grid slot" when a name edit triggers a re-sort.
+    id: u64,
     /// While the right-click "set aside" menu is open: `None` until a destination has
     /// been picked once (menu shows both options), `Some(d)` once `d` has been picked
     /// and is awaiting a second click to actually confirm it (menu shows only `d`, as
@@ -637,6 +650,10 @@ pub struct Face {
     /// can never survive from one open of the menu to the next.
     set_aside_armed: Option<SetAsideDestination>,
 }
+
+/// Source of the `id` field above: incremented once per `Face::load`, so every face
+/// gets a distinct, permanently stable identity for the lifetime of the process.
+static NEXT_FACE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 // Repeatedly append "-dup" to `family` until `is_taken(candidate)` says no other face
 // already claims (the fixed `given`, that candidate `family`) pair. Shared by two
@@ -729,6 +746,7 @@ impl Face {
             texture,
             last_saved_given:  initial_given,
             last_saved_family: initial_family,
+            id: NEXT_FACE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             set_aside_armed: None,
         })
     }
@@ -772,7 +790,11 @@ impl Face {
                 let response = ui.add(
                     egui::Image::new(&self.texture)
                         .max_size(Vec2 { x: w, y: w * ASPECT_RATIO })
-                        .sense(Sense::click_and_drag())
+                        // CLICK | DRAG, deliberately not `Sense::click_and_drag()`: that
+                        // convenience constructor also sets FOCUSABLE, which made the
+                        // image an invisible (unstyled) Tab stop sitting between one
+                        // face's surname and the next face's given name.
+                        .sense(Sense::CLICK | Sense::DRAG)
                 );
                 let response = response.on_hover_ui(|ui| {
                     ui.vertical(|ui| {
@@ -879,8 +901,17 @@ impl Face {
             // Handle UI and track if we need to process name changes
             let (lost_focus, names_changed) = match &mut self.data {
                 Data::Ready { face, .. } => {
-                    let g = ui.text_edit_singleline(&mut face.given ).on_hover_text("Prénom");
-                    let f = ui.text_edit_singleline(&mut face.family).on_hover_text("Nom de famille");
+                    // Explicit, stable ids (keyed on this Face's permanent `self.id`,
+                    // not on its transient position in the grid) so that keyboard
+                    // focus stays attached to "this face's box" — following it to
+                    // wherever it lands — across the re-sort a name edit triggers,
+                    // rather than to whichever face happens to occupy the same grid
+                    // slot next frame.
+                    let given_id  = Id::new(("given_name_box",  self.id));
+                    let family_id = Id::new(("family_name_box", self.id));
+
+                    let g = ui.add(TextEdit::singleline(&mut face.given ).id(given_id )).on_hover_text("Prénom");
+                    let f = ui.add(TextEdit::singleline(&mut face.family).id(family_id)).on_hover_text("Nom de famille");
 
                     let lost_focus = g.lost_focus() || f.lost_focus();
                     let names_changed = face.given != self.last_saved_given || face.family != self.last_saved_family;
