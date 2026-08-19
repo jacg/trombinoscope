@@ -928,24 +928,34 @@ impl Face {
                     (SetAsideDestination::Liste,    "Photo de la liste de classe"),
                     (SetAsideDestination::Ecartees, "Écarter cette photo"),
                 ] {
-                    if ui.button(label).clicked() {
+                    if ui.add_sized([180.0, 24.0], egui::Button::new(label)).clicked() {
                         self.set_aside_armed = Some(destination);
                     }
                 }
-                if ui.button("Fermer").clicked() {
+                if ui.add_sized([180.0, 24.0], egui::Button::new("Fermer")).clicked() {
                     ui.close();
                 }
                 None
             }
             Some(destination) => {
-                let label = match destination {
-                    SetAsideDestination::Liste    => "Confirmer : photo de la liste ?",
-                    SetAsideDestination::Ecartees => "Confirmer : écarter cette photo ?",
+                let (question, confirm_label) = match destination {
+                    SetAsideDestination::Liste    => ("Photo de la liste de classe ?", "Oui, photo de la liste"),
+                    SetAsideDestination::Ecartees => ("Écarter cette photo ?",         "Oui, écarter"),
                 };
-                let confirm = egui::Button::new(RichText::new(label).strong())
+                // The question sits where the just-clicked "arm" button was, but as a
+                // plain (unclickable) label, so a fast accidental double-click there
+                // lands on nothing. `Annuler` and `Confirmer` are then pushed well
+                // clear of that spot, spaced apart from each other, and sized well
+                // above the default button size, so a rushed second click can't land
+                // on the wrong one, or on either one by mistake.
+                ui.label(RichText::new(question).strong());
+                ui.add_space(10.0);
+                let cancel = ui.add_sized([180.0, 28.0], egui::Button::new("Annuler")).clicked();
+                ui.add_space(14.0);
+                let confirm = egui::Button::new(RichText::new(confirm_label).strong())
                     .fill(Color32::from_rgb(160, 40, 40));
-                let confirmed = ui.add(confirm).clicked();
-                if ui.button("Annuler").clicked() {
+                let confirmed = ui.add_sized([180.0, 36.0], confirm).clicked();
+                if cancel {
                     self.set_aside_armed = None;
                 }
                 if confirmed {
