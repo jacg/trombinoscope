@@ -5,6 +5,11 @@ use std::{
 };
 
 use img_parts::jpeg::Jpeg;
+use snafu::ResultExt;
+
+mod error;
+use error::{ReadDirSnafu, ReadDirEntrySnafu, ReadImageSnafu, EncodeJpegSnafu, DecodeJpegSnafu};
+pub use error::{Error, Result};
 
 /// Extract the non-extension part of the final component of `path`
 pub fn basename_stem(path: impl AsRef<Path>) -> Option<String> {
@@ -55,12 +60,14 @@ pub fn unix_rm_rf(path: impl AsRef<Path>) -> io::Result<()> {
 
 /// Return a `Vec` of files in given directory, which have a filename extension
 /// implying the contents are a JPEG image.
-pub fn find_jpgs_in_dir(dir: impl AsRef<Path>) -> Vec<PathBuf> {
-    std::fs::read_dir(dir)
-        .unwrap()
-        .map(|res| res.map(|e| e.path()).unwrap())
-        .filter(|x| is_jpg(x)) // WTF: eta conversion leads to filter not implementing Iterator!
-        .collect()
+pub fn find_jpgs_in_dir(dir: impl AsRef<Path>) -> Result<Vec<PathBuf>> {
+    let dir = dir.as_ref();
+    let mut jpgs = Vec::new();
+    for entry in std::fs::read_dir(dir).context(ReadDirSnafu { dir })? {
+        let path = entry.context(ReadDirEntrySnafu { dir })?.path();
+        if is_jpg(&path) { jpgs.push(path); }
+    }
+    Ok(jpgs)
 }
 
 /// Check whether the filename extension is one of jpg, jpeg, JPG or JPEG
@@ -117,10 +124,18 @@ pub fn path_to_item(image_path: impl AsRef<Path>) -> Option<Item> {
     })
 }
 
-// TODO make read_jpeg return Result
-pub fn read_jpeg(path: impl AsRef<Path>) -> Jpeg { bytes_to_jpeg(&std::fs::read(&path).unwrap()) }
-pub fn write_jpeg(jpeg: Jpeg, sink: &mut impl Write) { jpeg.encoder().write_to(sink).unwrap(); }
-pub fn bytes_to_jpeg(bytes: &[u8]) -> Jpeg { Jpeg::from_bytes(bytes.to_owned().into()).unwrap() }
+pub fn read_jpeg(path: impl AsRef<Path>) -> Result<Jpeg> {
+    let path = path.as_ref();
+    let bytes = std::fs::read(path).context(ReadImageSnafu { path })?;
+    bytes_to_jpeg(&bytes)
+}
+pub fn write_jpeg(jpeg: Jpeg, sink: &mut impl Write) -> Result<()> {
+    jpeg.encoder().write_to(sink).context(EncodeJpegSnafu)?;
+    Ok(())
+}
+pub fn bytes_to_jpeg(bytes: &[u8]) -> Result<Jpeg> {
+    Jpeg::from_bytes(bytes.to_owned().into()).context(DecodeJpegSnafu)
+}
 
 pub fn sort_key(given: &str, family: &str) -> (String, String) {
     (family.to_ascii_uppercase(), given.to_ascii_uppercase())

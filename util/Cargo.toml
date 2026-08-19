@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 img-parts = "0.3.0"
+snafu = "0.8"
 
 [dev-dependencies]
 pretty_assertions = "1.4.0"

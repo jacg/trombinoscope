@@ -23,6 +23,9 @@ pub enum Error{
     #[error("TODO io::Error description")]
     XXX(#[from] std::io::Error),
 
+    #[error(transparent)]
+    Util(#[from] util::Error),
+
     // TODO: this is probably too backend-specific to appear here
     #[error("Something went wrong in our use of `image`")]
     Image(#[from] image::ImageError),

@@ -419,6 +419,7 @@ pub fn trombi_file_for_dir(dir: impl AsRef<Path>, class_name: &str, ftype: FileT
 
 pub fn trombinoscope(dir: &Dirs) {
     let items = find_jpgs_in_dir(&dir.work)
+        .unwrap_or_else(|err| panic!("{err}"))
         .iter()
         .filter_map(path_to_item)
         .collect::<Vec<_>>();

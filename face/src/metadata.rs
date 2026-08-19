@@ -86,8 +86,7 @@ impl FaceInImage {
 
     /// Construct from information encoded in JPEG segment in the given file
     pub fn from_jpeg_in_file(path: impl AsRef<Path>) -> Result<Self> {
-        // TODO make read_jpeg return Result
-        Self::from_jpeg_with_message(&read_jpeg(&path), &path.as_ref().to_string_lossy())
+        Self::from_jpeg_with_message(&read_jpeg(&path)?, &path.as_ref().to_string_lossy())
     }
 
     /// Encode `self` as a JPEG metadata segment
@@ -107,7 +106,7 @@ impl FaceInImage {
     /// Inject `self` as a metadata segment into existing JPEG file, overwriting
     /// old segment if present.
     pub fn embed_in_jpeg(&self, path: impl AsRef<Path>) -> Result<()> {
-        let mut jpeg = read_jpeg(&path);
+        let mut jpeg = read_jpeg(&path)?;
         let all_segments = jpeg.segments_mut();
         let new_segment = self.as_jpeg_segment();
         if let Some(segment) = all_segments.iter_mut().find(|seg| seg.marker() == OUR_MARKER) {
@@ -116,16 +115,16 @@ impl FaceInImage {
             let new_pos = all_segments.len() - 1; // Hack around https://github.com/paolobarbolini/img-parts/issues/12
             all_segments.insert(new_pos, new_segment);
         };
-        let file = &mut File::create(path).unwrap();
-        write_jpeg(jpeg, file);
+        let file = &mut File::create(path)?;
+        write_jpeg(jpeg, file)?;
         Ok(())
     }
 
     pub fn strip_from_jpeg(path: impl AsRef<Path>) -> Result<()> {
-        let mut jpeg = read_jpeg(&path); // TODO make read_jpeg return Result
+        let mut jpeg = read_jpeg(&path)?;
         jpeg.remove_segments_by_marker(OUR_MARKER);
-        let file = &mut File::create(path).unwrap();
-        write_jpeg(jpeg, file);
+        let file = &mut File::create(path)?;
+        write_jpeg(jpeg, file)?;
         Ok(())
     }
 
@@ -145,7 +144,7 @@ Otherwise press any other key and rerun the program without the `--strip-metadat
         std::process::exit(0);
     } else {
         println!("STRIPPING METADATA");
-        for jpg in util::find_jpgs_in_dir(dir) {
+        for jpg in util::find_jpgs_in_dir(dir)? {
             FaceInImage::strip_from_jpeg(jpg)?;
         }
     }

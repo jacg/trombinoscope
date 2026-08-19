@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = cli::parse();
     let dirs = Dirs::new(cli.class_dir, cli.original_photos_subdir);
 
-    if cli.strip_metadata { face::metadata::strip_from_jpgs_in_dir(&dirs.photo).unwrap(); }
+    if cli.strip_metadata { face::metadata::strip_from_jpgs_in_dir(&dirs.photo)?; }
 
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
@@ -107,6 +107,7 @@ impl App {
         });
 
         let faces = find_jpgs_in_dir(&dirs.photo)
+            .unwrap_or_else(|err| panic!("{err}"))
             .into_iter()
             .map(move |path| { Face::load(path, cc, tx.clone()).unwrap() })
             .collect();
