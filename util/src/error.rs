@@ -32,6 +32,22 @@ pub enum Error {
 
     #[snafu(display("`{command}` failed:\n{stderr}"))]
     CommandFailed { command: String, stderr: String },
+
+    #[snafu(display("Could not create directory `{}`: {source}", dir.display()))]
+    CreateSubdir { source: io::Error, dir: PathBuf },
+
+    #[snafu(display(
+        "Impossible de déplacer les photos vers `{}` : {move_error}\n\
+         La tentative d'annulation (remise en place des photos déjà déplacées) a, elle aussi, échoué : {rollback_error}",
+        dir.display(),
+    ))]
+    BootstrapRollbackFailed { dir: PathBuf, move_error: String, rollback_error: String },
+
+    #[snafu(display(
+        "Les photos ont été remises en place après un échec, mais `{}` n'a pas pu être supprimé : {source}",
+        dir.display(),
+    ))]
+    RemoveSubdirAfterRollback { source: io::Error, dir: PathBuf },
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

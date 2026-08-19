@@ -15,6 +15,9 @@ use error::{
 };
 pub use error::{Error, Result};
 
+mod bootstrap;
+pub use bootstrap::{classify_situation, scan_class_dir, bootstrap_originaux, Situation, TopLevelEntry};
+
 /// Extract the non-extension part of the final component of `path`
 pub fn basename_stem(path: impl AsRef<Path>) -> Option<String> {
     path

@@ -10,7 +10,7 @@
 
 use std::{fs::File, path::{Path, PathBuf}, sync::{mpsc, Arc}, time::{Duration, Instant}, thread};
 
-use eframe::{egui, CreationContext};
+use eframe::egui;
 use egui::{Color32, ColorImage, Context, Key, PointerButton, Pos2, Rect, Response, RichText, Sense, TextureHandle, TextureOptions, Ui, Vec2};
 use image::{codecs::jpeg::JpegEncoder, DynamicImage};
 use rayon::prelude::*;
@@ -22,6 +22,7 @@ use util::{
     ensure_empty_dir, find_jpgs_in_dir, Dirs,
     MAITRES_DE_CLASSE_FILENAME, MAITRES_DE_CLASSE_DEFAULT_CONTENT,
     CONFIG_FILENAME, DEFAULT_JPEG_QUALITY, DEFAULT_IMAGE_WIDTH,
+    scan_class_dir, bootstrap_originaux, Situation,
 };
 
 mod error;
@@ -31,11 +32,15 @@ pub use error::{Error, Result};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let cli = cli::parse();
-    let dirs = Dirs::new(cli.class_dir, cli.original_photos_subdir)?;
-
-    if cli.strip_metadata { face::metadata::strip_from_jpgs_in_dir(&dirs.photo)?; }
+    let originals_subdir = cli.original_photos_subdir.to_string_lossy().into_owned();
+    let dirs = Dirs::new(&cli.class_dir, &originals_subdir)?;
 
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
+
+    // Decide whether this class directory has already been set up (photos already
+    // living in `originals_subdir`), needs bootstrapping (photos freshly dropped at
+    // top level, nothing done to them yet), or looks too unusual to touch automatically.
+    let situation = scan_class_dir(&dirs.class, &originals_subdir)?;
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -43,13 +48,171 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     };
 
+    let strip_metadata = cli.strip_metadata;
+
     eframe::run_native(
         "Trombinoscope",
         options,
-        Box::new(|cc| Ok(Box::new(App::try_new(dirs, cc)?))),
+        Box::new(move |cc| {
+            Ok(Box::new(TopApp::new(dirs, originals_subdir, situation, strip_metadata, &cc.egui_ctx)?))
+        }),
     )?;
 
     Ok(())
+}
+
+/// Top-level application state: before the operator has confirmed a first-run
+/// bootstrap, after we've decided the directory doesn't look workable, or the usual
+/// running trombinoscope editor.
+enum TopApp {
+    Bootstrap(BootstrapConfirm),
+    Weird(String),
+    Running(App),
+}
+
+impl TopApp {
+    fn new(
+        dirs: Dirs,
+        originals_subdir: String,
+        situation: Situation,
+        strip_metadata: bool,
+        egui_ctx: &Context,
+    ) -> Result<Self> {
+        Ok(match situation {
+            Situation::Fresh { jpgs } => TopApp::Bootstrap(BootstrapConfirm {
+                dirs, originals_subdir, jpgs, strip_metadata,
+                error: None,
+            }),
+            Situation::Established => {
+                if strip_metadata { face::metadata::strip_from_jpgs_in_dir(&dirs.photo)?; }
+                TopApp::Running(App::try_new(dirs, egui_ctx)?)
+            }
+            Situation::Weird(message) => {
+                // The operator this is aimed at won't be watching a terminal, but we
+                // print here too in case this is being run/diagnosed non-interactively.
+                println!("{message}");
+                TopApp::Weird(message)
+            }
+        })
+    }
+}
+
+impl eframe::App for TopApp {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        let transition = match self {
+            TopApp::Bootstrap(state) => state.show(ctx),
+            TopApp::Weird(message)   => { show_weird_screen(ctx, message.as_str()); None }
+            TopApp::Running(app)     => { <App as eframe::App>::update(app, ctx, frame); None }
+        };
+        if let Some(next) = transition {
+            *self = next;
+        }
+    }
+}
+
+/// Awaiting operator confirmation before moving freshly-arrived photos (loose at the
+/// top level of the class directory) into the originals subdirectory. See
+/// `util::Situation::Fresh`.
+struct BootstrapConfirm {
+    dirs: Dirs,
+    originals_subdir: String,
+    jpgs: Vec<String>,
+    strip_metadata: bool,
+    /// Set if a previous attempt to confirm failed, so it can be shown alongside a
+    /// retry of the same big button.
+    error: Option<String>,
+}
+
+impl BootstrapConfirm {
+    fn show(&mut self, ctx: &Context) -> Option<TopApp> {
+        let mut confirmed = false;
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.add_space(60.0);
+            ui.vertical_centered(|ui| {
+                ui.label(RichText::new("Première utilisation dans ce répertoire").size(34.0).strong());
+                ui.add_space(24.0);
+                ui.label(RichText::new(format!(
+                    "{} photo(s) trouvée(s) au premier niveau de ce répertoire.",
+                    self.jpgs.len(),
+                )).size(20.0));
+                ui.label(RichText::new(format!(
+                    "Elles vont être déplacées dans un nouveau sous-répertoire : « {} ».",
+                    self.originals_subdir,
+                )).size(20.0));
+
+                ui.add_space(16.0);
+                egui::CollapsingHeader::new(format!("Voir les {} photo(s) concernée(s)", self.jpgs.len()))
+                    .show(ui, |ui| {
+                        for jpg in &self.jpgs {
+                            ui.label(jpg.as_str());
+                        }
+                    });
+
+                if let Some(error) = &self.error {
+                    ui.add_space(24.0);
+                    ui.colored_label(Color32::LIGHT_RED, RichText::new(error.as_str()).size(18.0));
+                }
+
+                ui.add_space(48.0);
+                let button = egui::Button::new(RichText::new("Continuer").size(30.0).strong())
+                    .min_size(Vec2::new(280.0, 70.0))
+                    .fill(Color32::from_rgb(40, 130, 60));
+                if ui.add(button).clicked() {
+                    confirmed = true;
+                }
+            });
+        });
+
+        if confirmed { self.confirm(ctx) } else { None }
+    }
+
+    /// Perform the (transactional) move, then either hand back a `Running` app, a
+    /// `Weird` explanation if something went wrong after the move itself succeeded, or
+    /// (by returning `None`) stay put with `self.error` set so the same screen can be
+    /// shown again with the failure and an unchanged "Continuer" button to retry.
+    fn confirm(&mut self, ctx: &Context) -> Option<TopApp> {
+        if let Err(e) = bootstrap_originaux(&self.dirs.class, &self.originals_subdir, &self.jpgs) {
+            self.error = Some(e.to_string());
+            return None;
+        }
+
+        if self.strip_metadata {
+            if let Err(e) = face::metadata::strip_from_jpgs_in_dir(&self.dirs.photo) {
+                return Some(TopApp::Weird(format!(
+                    "Les photos ont bien été déplacées vers « {} », mais le nettoyage des métadonnées a échoué : {e}",
+                    self.originals_subdir,
+                )));
+            }
+        }
+
+        Some(match App::try_new(self.dirs.clone(), ctx) {
+            Ok(app) => TopApp::Running(app),
+            Err(e)  => TopApp::Weird(format!(
+                "Les photos ont bien été déplacées vers « {} », mais l'application n'a pas pu démarrer : {e}",
+                self.originals_subdir,
+            )),
+        })
+    }
+}
+
+/// Situation 3: doesn't cleanly look like a first run or an established one. Explained
+/// both here (for the non-technical operator) and on stdout (see `main`), then quits.
+fn show_weird_screen(ctx: &Context, message: &str) {
+    egui::CentralPanel::default().show(ctx, |ui| {
+        ui.add_space(60.0);
+        ui.vertical_centered(|ui| {
+            ui.label(RichText::new("Ce répertoire ne semble pas prêt").size(34.0).strong());
+            ui.add_space(24.0);
+            ui.label(RichText::new(message).size(20.0));
+            ui.add_space(48.0);
+            let button = egui::Button::new(RichText::new("Compris").size(30.0).strong())
+                .min_size(Vec2::new(240.0, 70.0));
+            if ui.add(button).clicked() {
+                std::process::exit(0);
+            }
+        });
+    });
 }
 
 #[derive(Debug, Clone)]
@@ -102,7 +265,7 @@ struct App {
 
 impl App {
 
-    fn try_new(dirs: Dirs, cc: &CreationContext) -> Result<Self> {
+    fn try_new(dirs: Dirs, egui_ctx: &Context) -> Result<Self> {
         let (tx, rx) = mpsc::channel::<(PathBuf, mpsc::Sender<face::Result<Data>>)>();
         std::thread::spawn(move || {
             for (path, tx) in rx.iter() {
@@ -112,7 +275,7 @@ impl App {
 
         let faces = find_jpgs_in_dir(&dirs.photo)?
             .into_iter()
-            .map(move |path| Face::load(path, cc, tx.clone()))
+            .map(move |path| Face::load(path, egui_ctx, tx.clone()))
             .collect::<face::Result<Vec<_>>>()?;
 
         let maitres_file_path = dirs.class.join(MAITRES_DE_CLASSE_FILENAME);
@@ -527,14 +690,14 @@ impl Face {
 
     fn load(
         path: impl AsRef<Path>,
-        cc: &CreationContext,
+        egui_ctx: &Context,
         tx_req: mpsc::Sender<(PathBuf, mpsc::Sender<face::Result<Data>>)>,
     ) -> face::Result<Face> {
         let (tx, rx) = mpsc::channel();
         let _ = tx_req.send((path.as_ref().into(), tx));
         let texture_name = path.as_ref().to_string_lossy().to_string();
         let dummy_image = ColorImage::filled([400,500], Color32::GRAY);
-        let texture = cc.egui_ctx.load_texture(&texture_name, dummy_image, egui::TextureOptions::default());
+        let texture = egui_ctx.load_texture(&texture_name, dummy_image, egui::TextureOptions::default());
 
         let (initial_given, initial_family) = parse_names_from_filename(path.as_ref());
 
