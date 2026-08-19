@@ -24,6 +24,7 @@ use util::{
     CONFIG_FILENAME, DEFAULT_JPEG_QUALITY, DEFAULT_IMAGE_WIDTH,
     scan_class_dir, bootstrap_originaux, Situation,
     set_aside, SetAsideDestination,
+    filename_to_given_family_or_blank,
 };
 
 mod error;
@@ -372,26 +373,17 @@ impl App {
     }
 
     fn resolve_duplicate_name(&self, given: &str, family: &str, exclude_index: usize) -> (String, String) {
-        let mut candidate_family = family.to_string();
-
-        loop {
-            // Check if this name pair is used by any other face
-            let is_duplicate = self.faces.iter().enumerate()
-                .any(|(i, face)| {
-                    i != exclude_index &&
-                    if let Data::Ready { face, .. } = &face.data {
-                        face.given == given && face.family == candidate_family
-                    } else {
-                        false
-                    }
-                });
-
-            if !is_duplicate {
-                return (given.to_string(), candidate_family);
-            }
-
-            candidate_family.push_str("-dup");
-        }
+        let family = dedup_family(family, |candidate| {
+            self.faces.iter().enumerate().any(|(i, face)| {
+                i != exclude_index &&
+                if let Data::Ready { face, .. } = &face.data {
+                    face.given == given && face.family == candidate
+                } else {
+                    false
+                }
+            })
+        });
+        (given.to_string(), family)
     }
 
     fn apply_name_change(&mut self, face_index: usize, given: &str, family: &str) -> Result<()> {
@@ -646,18 +638,18 @@ pub struct Face {
     set_aside_armed: Option<SetAsideDestination>,
 }
 
-// Parse names from filename in "Given @ Family.jpg" format
-// Also accepts formats without spaces around @
-fn parse_names_from_filename(path: &Path) -> (String, String) {
-    let filename = path.file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("");
-
-    if let Some((given, family)) = filename.split_once("@") {
-        (given.trim().to_string(), family.trim().to_string())
-    } else {
-        (String::new(), String::new())
+// Repeatedly append "-dup" to `family` until `is_taken(candidate)` says no other face
+// already claims (the fixed `given`, that candidate `family`) pair. Shared by two
+// places where several faces can otherwise collide on the same identity — most
+// commonly several still-unnamed (blank/blank) photos: renaming one face to match an
+// existing one (checked against the other loaded faces), and writing out each face's
+// cropped image for the PDF (checked against filenames already written in that batch).
+fn dedup_family(family: &str, mut is_taken: impl FnMut(&str) -> bool) -> String {
+    let mut candidate = family.to_string();
+    while is_taken(&candidate) {
+        candidate.push_str("-dup");
     }
+    candidate
 }
 
 // Sanitize names for use in filenames
@@ -706,7 +698,7 @@ fn rename_face_file(old_path: &Path, given: &str, family: &str) -> Result<PathBu
 
 fn load_face_data(path: PathBuf) -> face::Result<Data> {
     let image = Arc::new(image::open(&path)?);
-    let (given, family) = parse_names_from_filename(&path);
+    let (given, family) = filename_to_given_family_or_blank(&path).unwrap_or_default();
 
     // Load face position data from metadata, but get names from filename
     let mut face = FaceInImage::from_path_or_default_for(&path, image.width() as f32, image.height() as f32)?;
@@ -729,7 +721,7 @@ impl Face {
         let dummy_image = ColorImage::filled([400,500], Color32::GRAY);
         let texture = egui_ctx.load_texture(&texture_name, dummy_image, egui::TextureOptions::default());
 
-        let (initial_given, initial_family) = parse_names_from_filename(path.as_ref());
+        let (initial_given, initial_family) = filename_to_given_family_or_blank(path.as_ref()).unwrap_or_default();
 
         Ok(Face {
             path: path.as_ref().into(),
@@ -1114,9 +1106,27 @@ fn save_face_position_metadata(face_data: &[FaceData]) -> Result<()> {
 fn write_many_face_images(face_data: &[FaceData], dir: impl AsRef<Path>, quality: u8, width: u32) -> Result<()> {
     let dir_path = dir.as_ref().to_path_buf(); // Convert to owned PathBuf for sharing across threads
 
+    // Filenames are derived from given/family, and two faces can share those (most
+    // commonly: several still-unnamed photos, all blank/blank) — so filenames are
+    // deduplicated sequentially, up front, before the parallel write below, rather
+    // than writing everyone's file first and letting later writers silently clobber
+    // earlier ones under the same path (which is exactly how photos have been going
+    // missing from the generated PDF).
+    let mut used_filenames = std::collections::HashSet::new();
+    let filenames: Vec<String> = face_data
+        .iter()
+        .map(|data| {
+            let family = dedup_family(&data.face.family, |candidate| {
+                !used_filenames.insert(format!("{} @ {candidate}", &data.face.given))
+            });
+            format!("{} @ {family}.jpg", &data.face.given)
+        })
+        .collect();
+
     let results: Vec<Result<()>> = face_data
         .par_iter()
-        .map(|data| write_one_face_image(data, &dir_path, quality, width))
+        .zip(&filenames)
+        .map(|(data, filename)| write_one_face_image(data, filename, &dir_path, quality, width))
         .collect();
 
     // Return the first error if any occurred
@@ -1127,10 +1137,10 @@ fn write_many_face_images(face_data: &[FaceData], dir: impl AsRef<Path>, quality
     Ok(())
 }
 
-/// Save one cropped face in its own image file in `dir`. Assumes `dir` exists.
-fn write_one_face_image(data: &FaceData, dir: impl AsRef<Path>, quality: u8, target_width: u32) -> Result<()> {
-    let filename = format!("{} @ {}.jpg", &data.face.given, &data.face.family);
-    let path = dir.as_ref().join(&filename);
+/// Save one cropped face in its own image file in `dir`, under the given (already
+/// deduplicated) `filename`. Assumes `dir` exists.
+fn write_one_face_image(data: &FaceData, filename: &str, dir: impl AsRef<Path>, quality: u8, target_width: u32) -> Result<()> {
+    let path = dir.as_ref().join(filename);
     let file = &mut File::create(&path).context(CreateFileSnafu { path: &path })?;
 
     let cropped = crop(&data.image, &data.face);

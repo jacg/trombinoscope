@@ -31,14 +31,34 @@ pub fn basename_stem(path: impl AsRef<Path>) -> Option<String> {
         .map(Into::into)
 }
 
-/// Extract name and surname from filename in format 'name @ surname.<extension>'
+/// Extract name and surname from filename in format 'name @ surname.<extension>'.
+/// Filenames not yet prepared into that format (no `@`) still yield `Some`: `given`
+/// becomes the whole stem and `family` a placeholder instructing the operator to add
+/// the separator. Returning `None` here would make every caller's `?`/`filter_map`
+/// silently drop the photo — invisibly, in the generated PDF, which would then
+/// contain fewer images than the source directory. Intended for contexts with no
+/// other way to surface that instruction (the render pipeline, scripts, tests); the
+/// GUI has its own name fields for this and should use
+/// [`filename_to_given_family_or_blank`] instead, so the `@` convention — an
+/// implementation detail — never leaks into the interface.
 pub fn filename_to_given_family(path: impl AsRef<Path>) -> Option<(String, String)> {
     let stem = basename_stem(path)?;
-    let mut split = stem.split('@');
-    Some((
-        split.next()?.trim().into(),
-        split.next()?.trim().into(),
-    ))
+    match stem.split_once('@') {
+        Some((given, family)) => Some((given.trim().into(), family.trim().into())),
+        None                  => Some((stem.trim().into(), "Séparer prénom du nom par un `@`".into())),
+    }
+}
+
+/// Like [`filename_to_given_family`], but for GUI contexts: a filename not yet
+/// prepared with an `@` separator yields blank `given`/`family` rather than an
+/// explanatory placeholder, since the GUI's own (empty) name fields are already the
+/// operator's cue to fill them in.
+pub fn filename_to_given_family_or_blank(path: impl AsRef<Path>) -> Option<(String, String)> {
+    let stem = basename_stem(path)?;
+    match stem.split_once('@') {
+        Some((given, family)) => Some((given.trim().into(), family.trim().into())),
+        None                  => Some((String::new(), String::new())),
+    }
 }
 
 /// Run `cmd`, reporting an error if it could not be spawned, or exited unsuccessfully
@@ -229,6 +249,16 @@ mod tests {
         #[case] xfamily: &str,
     ) {
         let (given, family) = filename_to_given_family(filename).unwrap();
+        assert_eq!( given,  xgiven);
+        assert_eq!(family, xfamily);
+    }
+
+    #[rstest(filename,              xgiven,   xfamily,
+        case("123_IMG.JPEG",        "",       ""),
+        case("John @ Smith.jpg",    "John",   "Smith"),
+    )]
+    fn test_name_or_blank(filename: &str, xgiven: &str, xfamily: &str) {
+        let (given, family) = filename_to_given_family_or_blank(filename).unwrap();
         assert_eq!( given,  xgiven);
         assert_eq!(family, xfamily);
     }
