@@ -11,7 +11,7 @@
     #
     #    nix flake lock --update-input nixpkgs
 
-    nixpkgs     .url = "github:nixos/nixpkgs/nixos-25.05";
+    nixpkgs     .url = "github:nixos/nixpkgs/nixos-26.05";
     rust-overlay.url = "github:oxalica/rust-overlay";
     flake-utils .url = "github:numtide/flake-utils";
     flake-compat = {
@@ -43,10 +43,10 @@
           show-imagge-support = [
             pkgs.libGL
             pkgs.libxkbcommon
-            pkgs.xorg.libX11
-            pkgs.xorg.libXcursor
-            pkgs.xorg.libXi
-            pkgs.xorg.libXrandr
+            pkgs.libx11
+            pkgs.libxcursor
+            pkgs.libxi
+            pkgs.libxrandr
             pkgs.vulkan-loader
           ];
 
@@ -61,7 +61,7 @@
                 pkgs.bacon
                 pkgs.just
                 pkgs.pkg-config
-                pkgs.libsForQt5.kdialog
+                pkgs.kdePackages.kdialog
               ];
               packages = [
                 pkgs.lolcat
