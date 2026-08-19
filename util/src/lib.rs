@@ -1,4 +1,5 @@
 use std::{
+    fs,
     io::Write,
     ffi::OsStr,
     path::{Path, PathBuf},
@@ -12,6 +13,7 @@ mod error;
 use error::{
     ReadDirSnafu, ReadDirEntrySnafu, ReadImageSnafu, EncodeJpegSnafu, DecodeJpegSnafu,
     NotAClassNameSnafu, NonUtf8ClassNameSnafu, RunCommandSnafu, CommandFailedSnafu,
+    CreateSubdirSnafu, NoFileNameSnafu,
 };
 pub use error::{Error, Result};
 
@@ -122,6 +124,46 @@ impl Dirs {
             class_name,
         })
     }
+}
+
+/// Where a photo goes when the operator removes it from further consideration in the
+/// running app (see [`set_aside`]), rather than which crop/orientation/name it ends up
+/// with. Both subdirectories of [`Dirs::class`], created lazily on first use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetAsideDestination {
+    /// This is the class list photo, not a face at all.
+    Liste,
+    /// Neither a usable face photo nor the class list; set aside without further review.
+    Ecartees,
+}
+
+impl SetAsideDestination {
+    fn dirname(self) -> &'static str {
+        match self {
+            SetAsideDestination::Liste    => "Liste",
+            SetAsideDestination::Ecartees => "Écartées",
+        }
+    }
+}
+
+/// Move `image_path` (expected to currently live in `dirs.photo`) into `dirs.class`'s
+/// subdirectory for `destination`, creating that subdirectory first if this is its
+/// first use. Returns the photo's new path.
+pub fn set_aside(
+    dirs: &Dirs,
+    image_path: impl AsRef<Path>,
+    destination: SetAsideDestination,
+) -> Result<PathBuf> {
+    let image_path = image_path.as_ref();
+    let target_dir = dirs.class.join(destination.dirname());
+    if !target_dir.is_dir() {
+        fs::create_dir(&target_dir).context(CreateSubdirSnafu { dir: target_dir.clone() })?;
+    }
+
+    let filename = image_path.file_name().context(NoFileNameSnafu { path: image_path })?;
+    let target = target_dir.join(filename);
+    unix_mv(image_path, &target)?;
+    Ok(target)
 }
 
 /// Deduce a class name from the given directory

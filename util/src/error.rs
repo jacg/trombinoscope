@@ -36,6 +36,9 @@ pub enum Error {
     #[snafu(display("Could not create directory `{}`: {source}", dir.display()))]
     CreateSubdir { source: io::Error, dir: PathBuf },
 
+    #[snafu(display("`{}` has no filename component", path.display()))]
+    NoFileName { path: PathBuf },
+
     #[snafu(display(
         "Impossible de déplacer les photos vers `{}` : {move_error}\n\
          La tentative d'annulation (remise en place des photos déjà déplacées) a, elle aussi, échoué : {rollback_error}",

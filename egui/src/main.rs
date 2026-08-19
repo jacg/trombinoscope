@@ -11,7 +11,7 @@
 use std::{fs::File, path::{Path, PathBuf}, sync::{mpsc, Arc}, time::{Duration, Instant}, thread};
 
 use eframe::egui;
-use egui::{Color32, ColorImage, Context, Key, PointerButton, Pos2, Rect, Response, RichText, Sense, TextureHandle, TextureOptions, Ui, Vec2};
+use egui::{Color32, ColorImage, Context, Key, PointerButton, Popup, PopupCloseBehavior, Pos2, Rect, Response, RichText, Sense, TextureHandle, TextureOptions, Ui, Vec2};
 use image::{codecs::jpeg::JpegEncoder, DynamicImage};
 use rayon::prelude::*;
 use snafu::ResultExt;
@@ -23,6 +23,7 @@ use util::{
     MAITRES_DE_CLASSE_FILENAME, MAITRES_DE_CLASSE_DEFAULT_CONTENT,
     CONFIG_FILENAME, DEFAULT_JPEG_QUALITY, DEFAULT_IMAGE_WIDTH,
     scan_class_dir, bootstrap_originaux, Situation,
+    set_aside, SetAsideDestination,
 };
 
 mod error;
@@ -538,16 +539,20 @@ impl App {
 
         let mut sort = false;
         let mut name_changes = Vec::new();
+        let mut set_asides = Vec::new();
         let n_rows = self.faces.len() / 6 + 1;
 
         egui::Grid::new("face grid").show(ui, |ui| {
             for (n, face) in self.faces.iter_mut().enumerate() {
-                let (sort_requested, name_change) = face.show(ui, ctx, n_rows);
+                let (sort_requested, name_change, set_aside) = face.show(ui, ctx, n_rows);
                 if sort_requested {
                     sort = true;
                 }
                 if let Some((given, family)) = name_change {
                     name_changes.push((n, given, family));
+                }
+                if let Some(destination) = set_aside {
+                    set_asides.push((n, destination));
                 }
                 if n % 6 == 5 { ui.end_row() }
             }
@@ -570,6 +575,16 @@ impl App {
                         face.family = saved_family;
                     }
                 }
+            }
+        }
+
+        // Process set-aside requests. Removing from `self.faces` invalidates every
+        // index after the one removed, so this must happen in descending order.
+        set_asides.sort_by_key(|(face_index, _)| std::cmp::Reverse(*face_index));
+        for (face_index, destination) in set_asides {
+            match set_aside(&self.dirs, &self.faces[face_index].path, destination) {
+                Ok(_) => { self.faces.remove(face_index); }
+                Err(e) => eprintln!("Failed to set aside photo: {}", e),
             }
         }
 
@@ -623,6 +638,12 @@ pub struct Face {
     texture: TextureHandle,
     last_saved_given: String,
     last_saved_family: String,
+    /// While the right-click "set aside" menu is open: `None` until a destination has
+    /// been picked once (menu shows both options), `Some(d)` once `d` has been picked
+    /// and is awaiting a second click to actually confirm it (menu shows only `d`, as
+    /// a question). Reset to `None` whenever the menu (re)opens, so a stale arming
+    /// can never survive from one open of the menu to the next.
+    set_aside_armed: Option<SetAsideDestination>,
 }
 
 // Parse names from filename in "Given @ Family.jpg" format
@@ -716,6 +737,7 @@ impl Face {
             texture,
             last_saved_given:  initial_given,
             last_saved_family: initial_family,
+            set_aside_armed: None,
         })
     }
 
@@ -738,12 +760,18 @@ impl Face {
         Ok(())
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, ctx: &Context, n_rows: usize) -> (bool, Option<(String, String)>) {
+    pub fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        ctx: &Context,
+        n_rows: usize,
+    ) -> (bool, Option<(String, String)>, Option<SetAsideDestination>) {
         let w = ctx.available_rect().width();
         let h = ctx.available_rect().height();
         let top_margin = 10.0;
         let mut request_sort = false;
         let mut name_change = None;
+        let mut set_aside_request = None;
 
         ui.vertical_centered(|ui| {
             ui.set_width((w / 6.6).min((h-top_margin) / (n_rows as f32 * 5.0 / 3.0)));
@@ -799,6 +827,8 @@ impl Face {
                         ui.separator();
                         ui.label("• CTRL S : sauvegarder");
                         ui.label("• CTRL Q : quitter sans sauvegarder");
+                        ui.separator();
+                        ui.label("• Clic droit : écarter cette photo (liste de classe, ou mise à l'écart)");
                     });
                 });
                 if response.clicked_by(PointerButton::Primary) {
@@ -836,6 +866,22 @@ impl Face {
                         }
                     });
                 }
+                // A fresh right-click always starts from the unarmed (two-destination)
+                // menu, never resuming a confirm state left over from a previous open.
+                if response.secondary_clicked() {
+                    self.set_aside_armed = None;
+                }
+                // Not the `response.context_menu(...)` shortcut: that hard-codes egui's
+                // default `CloseOnClick` behaviour, which would tear the popup down on
+                // the very first ("arm") click below, before the second ("confirm")
+                // click ever gets a chance to render. `CloseOnClickOutside` leaves the
+                // popup open across both clicks; it's still closed explicitly via
+                // `ui.close()` on "Fermer", "Annuler", and on confirm.
+                Popup::context_menu(&response)
+                    .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+                    .show(|ui| {
+                        set_aside_request = self.show_set_aside_menu(ui);
+                    });
             });
 
             // Handle UI and track if we need to process name changes
@@ -868,7 +914,49 @@ impl Face {
             }
         });
 
-        (request_sort, name_change)
+        (request_sort, name_change, set_aside_request)
+    }
+
+    /// Content of the right-click "set aside" menu. Returns `Some(d)` only on the
+    /// frame the operator's second click actually confirms destination `d` — every
+    /// other interaction (arming a destination, cancelling, closing) returns `None`
+    /// and is reflected purely in `self.set_aside_armed`.
+    fn show_set_aside_menu(&mut self, ui: &mut Ui) -> Option<SetAsideDestination> {
+        match self.set_aside_armed {
+            None => {
+                for (destination, label) in [
+                    (SetAsideDestination::Liste,    "Photo de la liste de classe"),
+                    (SetAsideDestination::Ecartees, "Écarter cette photo"),
+                ] {
+                    if ui.button(label).clicked() {
+                        self.set_aside_armed = Some(destination);
+                    }
+                }
+                if ui.button("Fermer").clicked() {
+                    ui.close();
+                }
+                None
+            }
+            Some(destination) => {
+                let label = match destination {
+                    SetAsideDestination::Liste    => "Confirmer : photo de la liste ?",
+                    SetAsideDestination::Ecartees => "Confirmer : écarter cette photo ?",
+                };
+                let confirm = egui::Button::new(RichText::new(label).strong())
+                    .fill(Color32::from_rgb(160, 40, 40));
+                let confirmed = ui.add(confirm).clicked();
+                if ui.button("Annuler").clicked() {
+                    self.set_aside_armed = None;
+                }
+                if confirmed {
+                    self.set_aside_armed = None;
+                    ui.close();
+                    Some(destination)
+                } else {
+                    None
+                }
+            }
+        }
     }
 
     pub fn centre_on_pointer(&mut self, response: &Response) {
