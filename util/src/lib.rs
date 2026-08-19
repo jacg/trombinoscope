@@ -111,9 +111,8 @@ fn class_from_dir(dir: impl AsRef<Path>) -> String {
     class.to_str().unwrap().into()
 }
 
-#[derive(Debug, Clone, Copy)] pub enum FileType { Trombi, Labels }
-#[derive(Debug, Clone)      ] pub struct Name { pub given: String, pub family: String }
-#[derive(Debug, Clone)      ] pub struct Item { pub image: PathBuf, pub name: Name }
+#[derive(Debug, Clone)] pub struct Name { pub given: String, pub family: String }
+#[derive(Debug, Clone)] pub struct Item { pub image: PathBuf, pub name: Name }
 
 pub fn path_to_item(image_path: impl AsRef<Path>) -> Option<Item> {
     let basename = image_path.as_ref().file_name()?;

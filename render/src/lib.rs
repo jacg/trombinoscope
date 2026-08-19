@@ -18,7 +18,7 @@ use typst::{
 };
 
 use util::{
-    Dirs, FileType, Item, Name,
+    Dirs, Item, Name,
     MAITRES_DE_CLASSE_FILENAME, MAITRES_DE_CLASSE_DEFAULT_CONTENT,
     find_jpgs_in_dir, path_to_item, sort_key, unix_rm_rf, unix_mv,
 };
@@ -244,49 +244,6 @@ pub fn http_successful(status: u16) -> bool {
     status / 100 == 2
 }
 
-fn labels_typst_src(items: &[Item], dir: &Dirs) -> String {
-    let institution = "CO Montbrillant";
-    let class_name = dir.class_name();
-    let label = |given, family| format!("label([{given}], [{family}])");
-    let labels = items
-        .iter()
-        .map(|i| label(i.name.given.clone(), i.name.family.clone()))
-        .collect::<Vec<_>>()
-        .join(",\n    ");
-
-    format!{r#"#set page(
-  paper: "a4",
-  margin: (top: 10mm, bottom: 4mm, left: 5mm, right: 5mm),
-)
-#set text(size: 23pt, font: "Inconsolata", weight: "black")
-
-#let colG = rgb(150,0,0)
-#let colF = rgb(0,0,150)
-
-#let curry_label(institution, class) = {{
-    (given, family) => {{
-        set rect(width: 10cm, height: 13.3mm, stroke: none)
-        stack(
-        dir: ttb,
-        rect(),
-        rect(align(bottom, text(stroke: none, fill: colF, upper[#family]))),
-        rect(              text(stroke: none, fill: colG,      [#given])),
-        rect(                                                  [#class]),
-        rect(                                                  [#institution]),
-       )
-   }}
-}}
-
-#let label = curry_label([{institution}], [Classe {class_name}])
-
-#table(
-    columns: 2,
-    align: center + horizon,
-    stroke: 0.6pt + gray,
-    {labels}
-)"#}
-}
-
 fn trombi_typst_src(items: &[Item], dir: &Dirs) -> String {
     let table_items = items
         .iter()
@@ -370,13 +327,9 @@ fn trombi_typst_src(items: &[Item], dir: &Dirs) -> String {
 fn render(
     content: String,
     dir: &Dirs,
-    ftype: FileType,
 ) {
     let class_name = dir.class_name();
-    let typst_src_filename = format!("generated-{}.typ", match ftype {
-        FileType::Trombi => format!("tombinoscope_{class_name}"),
-        FileType::Labels => format!("étiquettes_{class_name}"),
-    });
+    let typst_src_filename = format!("generated-tombinoscope_{class_name}.typ");
 
     let typst_src_path = dir.work.join(&typst_src_filename);
     let mut out = File::create(typst_src_path).unwrap();
@@ -395,25 +348,21 @@ fn render(
     // Output to pdf
     let pdf_bytes = typst_pdf::pdf(&document, Smart::Auto, None);
 
-    let pdf_path = trombi_file_for_dir(&dir.work, &dir.class_name(), ftype);
+    let pdf_path = trombi_file_for_dir(&dir.work, &dir.class_name());
     let pdf_path_display = pdf_path.display();
 
     fs::write(&pdf_path, pdf_bytes)
         .unwrap_or_else(|err| panic!("Error writing {pdf_path_display}:\n{err:?}"));
 
-    let moved_pdf_path = trombi_file_for_dir(&dir.class, &dir.class_name(), ftype);
+    let moved_pdf_path = trombi_file_for_dir(&dir.class, &dir.class_name());
     let moved_pdf_path_display = moved_pdf_path.display();
     let msg = &format!("PDF généré: `{moved_pdf_path_display}`.");
     println!("{msg}");
 }
 
 
-pub fn trombi_file_for_dir(dir: impl AsRef<Path>, class_name: &str, ftype: FileType) -> PathBuf {
-    use FileType::*;
-    dir.as_ref().join(match ftype {
-        Trombi => format!("trombinoscope_{class_name}.pdf"),
-        Labels => format!("étiquettes_{class_name}.pdf"),
-    })
+pub fn trombi_file_for_dir(dir: impl AsRef<Path>, class_name: &str) -> PathBuf {
+    dir.as_ref().join(format!("trombinoscope_{class_name}.pdf"))
 }
 
 
@@ -427,21 +376,13 @@ pub fn trombinoscope(dir: &Dirs) {
     let mut items = items.to_vec();
     items.sort_by_cached_key(|f| sort_key(&f.name.given, &f.name.family));
 
-    use FileType::*;
-    render(trombi_typst_src(&items, dir), dir, Trombi);
-    render(labels_typst_src(&items, dir), dir, Labels);
+    render(trombi_typst_src(&items, dir), dir);
 
     unix_rm_rf(&dir.render).unwrap();
     unix_mv(&dir.work, &dir.render).unwrap();
 
     fs::copy(
-        trombi_file_for_dir(&dir.render, &dir.class_name(), Trombi),
-        trombi_file_for_dir(&dir.class , &dir.class_name(), Trombi),
+        trombi_file_for_dir(&dir.render, &dir.class_name()),
+        trombi_file_for_dir(&dir.class , &dir.class_name()),
     ).unwrap();
-
-    fs::copy(
-        trombi_file_for_dir(&dir.render, &dir.class_name(), Labels),
-        trombi_file_for_dir(&dir.class , &dir.class_name(), Labels),
-    ).unwrap();
-
 }

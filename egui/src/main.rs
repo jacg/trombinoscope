@@ -21,7 +21,6 @@ use util::{
     ensure_empty_dir, find_jpgs_in_dir, Dirs,
     MAITRES_DE_CLASSE_FILENAME, MAITRES_DE_CLASSE_DEFAULT_CONTENT,
     CONFIG_FILENAME, DEFAULT_JPEG_QUALITY, DEFAULT_IMAGE_WIDTH,
-    FileType,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -148,7 +147,7 @@ impl App {
 
     fn check_pdf_status(dirs: &Dirs) -> PdfStatus {
         // Look for trombinoscope PDF in the class directory
-        let trombi_path = trombi_file_for_dir(&dirs.class, &dirs.class_name(), FileType::Trombi);
+        let trombi_path = trombi_file_for_dir(&dirs.class, &dirs.class_name());
 
         if let Ok(metadata) = std::fs::metadata(&trombi_path) {
             PdfStatus::Ready {
@@ -303,7 +302,7 @@ impl App {
     }
 
     fn get_pdf_size(&self) -> Option<u64> {
-        let trombi_path = trombi_file_for_dir(&self.dirs.class, &self.dirs.class_name(), FileType::Trombi);
+        let trombi_path = trombi_file_for_dir(&self.dirs.class, &self.dirs.class_name());
         std::fs::metadata(&trombi_path).ok()?.len().into()
     }
 
