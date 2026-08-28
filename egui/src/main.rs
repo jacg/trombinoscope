@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // against a grid of photos, making it easy to lose track of which box has
             // focus. Bump it once, globally, to something unmissable.
             cc.egui_ctx.style_mut(|style| {
-                style.visuals.selection.stroke = egui::Stroke::new(3.0, Color32::from_rgb(255, 200, 0));
+                style.visuals.selection.stroke = egui::Stroke::new(3.0_f32, Color32::from_rgb(255, 200, 0));
             });
             Ok(Box::new(TopApp::new(dirs, originals_subdir, situation, strip_metadata, &cc.egui_ctx)?))
         }),
