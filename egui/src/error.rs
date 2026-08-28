@@ -6,12 +6,15 @@ use snafu::Snafu;
 #[snafu(visibility(pub(crate)))]
 pub enum Error {
 
+    #[snafu(display("{source}"))]
     #[snafu(context(false))]
     Face { source: face::Error },
 
+    #[snafu(display("{source}"))]
     #[snafu(context(false))]
     Render { source: render::Error },
 
+    #[snafu(display("{source}"))]
     #[snafu(context(false))]
     Util { source: util::Error },
 
