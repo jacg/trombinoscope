@@ -303,6 +303,28 @@ fn trombi_typst_src(items: &[Item], dir: &Dirs) -> Result<String> {
 #let pic_w = 200mm / n_columns
 #let pic_h = pic_w * 5 / 4
 
+// Shrinks `body` down from `max-size` (never below `min-size`) via
+// binary search until it measures no wider than `avail-width`.
+#let fit-text(body, avail-width, max-size: 10pt, min-size: 5pt, tries: 8) = context {{
+    let lo   = min-size
+    let hi   = max-size
+    let best = min-size
+
+    for _ in range(tries) {{
+        let mid = (lo + hi) / 2
+        let w   = measure(text(size: mid, body)).width
+
+        if w <= avail-width {{
+            best = mid
+            lo   = mid
+        }} else {{
+            hi = mid
+        }}
+    }}
+
+    text(size: best, body)
+}}
+
 #let item(given, family, path) = {{
     set rect(
         width: pic_w,
@@ -311,8 +333,10 @@ fn trombi_typst_src(items: &[Item], dir: &Dirs) -> Result<String> {
         height: 10mm,
     )
 
-    let given  = text(stroke: none, fill: colG,        given  )
-    let family = text(stroke: none, fill: colF, upper[#family])
+    let avail-w = pic_w - 10pt
+
+    let given  = fit-text(text(stroke: none, fill: colG,        given  ), avail-w)
+    let family = fit-text(text(stroke: none, fill: colF, upper[#family]), avail-w)
 
     stack(
         dir: ttb,
