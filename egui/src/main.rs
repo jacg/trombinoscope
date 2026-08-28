@@ -117,6 +117,12 @@ impl eframe::App for TopApp {
             *self = next;
         }
     }
+
+    fn on_exit(&mut self, gl: Option<&eframe::glow::Context>) {
+        if let TopApp::Running(app) = self {
+            <App as eframe::App>::on_exit(app, gl);
+        }
+    }
 }
 
 /// Awaiting operator confirmation before moving freshly-arrived photos (loose at the
@@ -408,7 +414,61 @@ impl App {
         Ok(())
     }
 
+    /// Resolve duplicates and attempt the on-disk rename for each `(face_index, given,
+    /// family)` triple, reverting the in-memory names to their last-saved values on
+    /// failure. Returns whether any face was successfully renamed (i.e. whether the
+    /// grid should be re-sorted).
+    fn process_name_changes(&mut self, name_changes: Vec<(usize, String, String)>) -> bool {
+        let mut sort = false;
+        for (face_index, given, family) in name_changes {
+            let (final_given, final_family) = self.resolve_duplicate_name(&given, &family, face_index);
+            match self.apply_name_change(face_index, &final_given, &final_family) {
+                Ok(()) => {
+                    sort = true;
+                }
+                Err(e) => {
+                    eprintln!("Failed to rename file: {}", e);
+                    // Revert names on file system error - clone values first to avoid borrow conflicts
+                    let saved_given  = self.faces[face_index].last_saved_given.clone();
+                    let saved_family = self.faces[face_index].last_saved_family.clone();
+                    if let Data::Ready { face, .. } = &mut self.faces[face_index].data {
+                        face.given  = saved_given;
+                        face.family = saved_family;
+                    }
+                }
+            }
+        }
+        sort
+    }
+
+    /// Face indices whose in-memory name no longer matches what was last persisted to
+    /// disk via a rename — i.e. edits still sitting only in the text field, which
+    /// hasn't (yet) lost focus. Needed because on-disk renaming is normally driven by
+    /// focus loss (see `Face::show`), which never fires if the operator saves or quits
+    /// while still "in" a name box.
+    fn pending_name_changes(&self) -> Vec<(usize, String, String)> {
+        self.faces.iter().enumerate().filter_map(|(n, face)| {
+            let Data::Ready { face: face_data, .. } = &face.data else { return None };
+            let changed = face_data.given  != face.last_saved_given
+                       || face_data.family != face.last_saved_family;
+            changed.then(|| (n, face_data.given.clone(), face_data.family.clone()))
+        }).collect()
+    }
+
+    /// Persist any name edits that are only sitting in-memory (and thus already
+    /// reflected in generated PDFs) but haven't yet been written to disk as a filename
+    /// rename. Call this at every point where the app could stop running — an explicit
+    /// save, or before quitting — so a name typed and never "clicked away from" isn't
+    /// lost.
+    fn flush_pending_name_changes(&mut self) {
+        let name_changes = self.pending_name_changes();
+        if !name_changes.is_empty() {
+            self.process_name_changes(name_changes);
+        }
+    }
+
     fn request_save(&mut self) {
+        self.flush_pending_name_changes();
         let save_data = self.collect_save_data();
 
         // If a save request arrives while the PDFs are being generated, finish
@@ -558,23 +618,8 @@ impl App {
         });
 
         // Process name changes with duplicate resolution
-        for (face_index, given, family) in name_changes {
-            let (final_given, final_family) = self.resolve_duplicate_name(&given, &family, face_index);
-            match self.apply_name_change(face_index, &final_given, &final_family) {
-                Ok(()) => {
-                    sort = true;
-                }
-                Err(e) => {
-                    eprintln!("Failed to rename file: {}", e);
-                    // Revert names on file system error - clone values first to avoid borrow conflicts
-                    let saved_given  = self.faces[face_index].last_saved_given.clone();
-                    let saved_family = self.faces[face_index].last_saved_family.clone();
-                    if let Data::Ready { face, .. } = &mut self.faces[face_index].data {
-                        face.given  = saved_given;
-                        face.family = saved_family;
-                    }
-                }
-            }
+        if self.process_name_changes(name_changes) {
+            sort = true;
         }
 
         // Process set-aside requests. Removing from `self.faces` invalidates every
@@ -599,7 +644,7 @@ impl App {
                 };
             }
             key!{S (CTRL)  { self.request_save(); }}
-            key!{Q (CTRL)  { std::process::exit(0) }} // TODO exit less brutally
+            key!{Q (CTRL)  { self.flush_pending_name_changes(); std::process::exit(0) }} // TODO exit less brutally
         });
     }
 
@@ -619,6 +664,14 @@ impl eframe::App for App {
                 self.show(ui, ctx);
             });
         });
+    }
+
+    // Closing the window (as opposed to the Ctrl+Q hard exit in `handle_keys`) never
+    // goes through a widget losing focus, so without this, a name typed into the last
+    // box touched before quitting would still be reflected in a PDF generated moments
+    // earlier, yet never make it into the corresponding filename on disk.
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.flush_pending_name_changes();
     }
 }
 
